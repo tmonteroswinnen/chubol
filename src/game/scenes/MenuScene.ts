@@ -7,7 +7,17 @@ import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
 import { soundBoard } from '../render/audio';
 import { PALETTE } from '../render/palette';
-import { body, developmentArtBadge, heading, isTouchDevice, makeButton, panel, UI_FONT, type Button } from '../render/ui';
+import {
+  body,
+  developmentArtBadge,
+  heading,
+  isTouchDevice,
+  makeButton,
+  overlayScrim,
+  panel,
+  UI_FONT,
+  type Button,
+} from '../render/ui';
 import { REFERENCE_BALL, REFERENCE_POSES } from './referencePose';
 
 export type GameMode = 'practice' | 'challenge';
@@ -15,6 +25,11 @@ export type GameMode = 'practice' | 'challenge';
 export interface GameSceneData {
   readonly mode: GameMode;
   readonly teams: readonly [TeamConfig, TeamConfig];
+  /**
+   * Which pair the person is playing. The other one is played by the machine.
+   * `null` means both pairs are human, taking turns on the same device.
+   */
+  readonly humanTeam?: number | null;
   /** Overrides the length of a pair's turn. Used for a short match and by tests. */
   readonly turnMs?: number;
   readonly tiebreakMs?: number;
@@ -63,9 +78,9 @@ export class MenuScene extends Phaser.Scene {
 
     panel(this, x, top + 130, 520, 400).setDepth(DEPTHS.hud).setAlpha(0.9);
 
-    const start = (mode: GameMode) => () => {
+    const start = (mode: GameMode, humanTeam: number | null = null) => () => {
       soundBoard.unlock();
-      this.scene.start('Game', { mode, teams: defaultTeams() } satisfies GameSceneData);
+      this.scene.start('Game', { mode, teams: defaultTeams(), humanTeam } satisfies GameSceneData);
     };
 
     const make = (dy: number, label: string, action: () => void, accent = false): Button => {
@@ -84,12 +99,13 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud + 1);
 
-    make(24, 'JUGAR — PAREJA VS PAREJA', start('challenge'), true);
-    make(98, 'PRÁCTICA LIBRE', start('practice'));
-    make(172, 'REGLAS', () => this.showRules());
-    make(246, 'COMPARACIÓN VISUAL', () => this.scene.start('Compare'));
+    make(24, 'JUGAR CONTRA LA MÁQUINA', () => this.showPairPicker(), true);
+    make(98, 'LOS DOS EN ESTE APARATO', start('challenge', null));
+    make(172, 'PRÁCTICA LIBRE', start('practice'));
+    make(246, 'REGLAS', () => this.showRules());
+    make(320, 'COMPARACIÓN VISUAL', () => this.scene.start('Compare'));
 
-    const soundButton = make(320, '', () => {
+    const soundButton = make(394, '', () => {
       soundBoard.unlock();
       soundBoard.toggleMuted();
       this.refreshSoundLabel();
@@ -116,6 +132,54 @@ export class MenuScene extends Phaser.Scene {
     this.soundLabelText?.setText(soundBoard.muted ? 'SONIDO: APAGADO' : 'SONIDO: ENCENDIDO');
   }
 
+  /** Pick which pair you are. The other one is played by the machine. */
+  private showPairPicker(): void {
+    this.closeOverlay();
+    const teams = defaultTeams();
+    const width = 900;
+    const height = 430;
+    const background = panel(this, 0, 0, width, height);
+    const title = heading(this, 0, -height / 2 + 46, '¿QUÉ PAREJA SOS?');
+    const subtitle = this.add
+      .text(0, -height / 2 + 92, 'La otra la juega la máquina', {
+        fontFamily: UI_FONT,
+        fontSize: '21px',
+        color: PALETTE.hudText,
+      })
+      .setOrigin(0.5);
+
+    const picks = teams.map((team, index) =>
+      makeButton(
+        this,
+        0,
+        -34 + index * 88,
+        team.name.toUpperCase(),
+        () => {
+          soundBoard.unlock();
+          this.scene.start('Game', {
+            mode: 'challenge',
+            teams,
+            humanTeam: index,
+          } satisfies GameSceneData);
+        },
+        { width: 560, height: 72, accent: index === 0 },
+      ),
+    );
+    const back = makeButton(this, 0, height / 2 - 52, 'VOLVER', () => this.closeOverlay(), { width: 220, height: 50 });
+
+    this.overlay = this.add
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
+        overlayScrim(this, LOGICAL_WIDTH, LOGICAL_HEIGHT),
+        background,
+        title,
+        subtitle,
+        ...picks.map((b) => b.container),
+        back.container,
+      ])
+      .setDepth(DEPTHS.hud + 20);
+    this.buttons.push(...picks, back);
+  }
+
   private showRules(): void {
     this.closeOverlay();
     const width = 1120;
@@ -135,6 +199,7 @@ export class MenuScene extends Phaser.Scene {
         '  una marca sin tirar.',
         '· Después va la otra pareja, su minuto.',
         '· Gana la pareja que hizo más puntos.',
+        '· Dentro del minuto se turnan los dos de la pareja.',
         '· Un solo aro. No se pueden hacer tapones.',
         '· No hay regla de rebote: hay que ir a buscar la pelota',
         '  rápido para no perder tiempo.',
@@ -164,7 +229,14 @@ export class MenuScene extends Phaser.Scene {
     const close = makeButton(this, 0, height / 2 - 52, 'VOLVER', () => this.closeOverlay(), { width: 220, height: 50 });
 
     this.overlay = this.add
-      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [background, title, confirmed, values, close.container])
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
+        overlayScrim(this, LOGICAL_WIDTH, LOGICAL_HEIGHT),
+        background,
+        title,
+        confirmed,
+        values,
+        close.container,
+      ])
       .setDepth(DEPTHS.hud + 20);
     this.buttons.push(close);
   }

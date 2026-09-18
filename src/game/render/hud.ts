@@ -56,6 +56,9 @@ export class Hud {
         fontSize: '19px',
         color: PALETTE.hudText,
         align: 'center',
+        // Three short lines stacked in a narrow margin read as one blob without
+        // space between them.
+        lineSpacing: 7,
         wordWrap: { width: MARGIN_WIDTH - 18 },
       })
       .setOrigin(0.5, 0);

@@ -30,6 +30,7 @@ Otros comandos:
 ```bash
 pnpm build        # verifica tipos y compila a dist/
 pnpm preview      # sirve dist/ en http://localhost:4173
+pnpm celular      # lo mismo, pero visible desde el celular en la misma wifi
 pnpm typecheck    # sólo verificación de tipos
 pnpm test         # pruebas de reglas, física y proyección (sin renderer)
 pnpm capture      # capturas reales del juego + revisión de consola
@@ -57,6 +58,10 @@ En la compu:
 
 En el celular, con el dedo: tocás una marca para ir, mantenés **TIRAR** y soltás,
 y tocás la pelota para ir a buscarla. Ver [`docs/MOBILE.md`](docs/MOBILE.md).
+
+Elegís si sos **Bocha y Farico** o **Agus y Facu**, y la otra pareja la juega la
+computadora con las mismas reglas y sin ventajas. También están el modo de pasarse
+el aparato entre los dos y la práctica libre. Ver [`docs/MAQUINA.md`](docs/MAQUINA.md).
 
 Soltá cuando la aguja esté dentro de la franja verde. **Si soltás adentro, entra.**
 La franja es el intervalo de acierto real de la física, no una aproximación, y se
@@ -104,6 +109,7 @@ amplía una zona con una grilla, que es como se midieron los puntos de referenci
 | [`docs/ASSET_REQUESTS.md`](docs/ASSET_REQUESTS.md) | Qué falta producir, con especificaciones exactas |
 | [`docs/ASSET_MANIFEST.md`](docs/ASSET_MANIFEST.md) | Tabla de recursos y estado |
 | [`docs/MOBILE.md`](docs/MOBILE.md) | Versión para celular: controles táctiles, instalación, sin conexión |
+| [`docs/MAQUINA.md`](docs/MAQUINA.md) | La pareja que juega la computadora: qué tan buena es y por qué no hace trampa |
 | [`docs/CHUBOL-CONTINUAR.md`](docs/CHUBOL-CONTINUAR.md) | Tus instrucciones con el paquete de arte |
 
 ## Falta definir

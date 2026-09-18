@@ -172,7 +172,7 @@ describe('CHUBOL match: pairs, one minute each', () => {
     expect(match.finished).toBe(true);
     const result = match.result();
     expect(result?.winners).toHaveLength(1);
-    expect(result?.winners[0]?.name).toBe('Pareja 1');
+    expect(result?.winners[0]?.name).toBe('Bocha y Farico');
     expect(result?.shared).toBe(false);
   });
 
@@ -195,7 +195,7 @@ describe('CHUBOL match: pairs, one minute each', () => {
     shoot(match, 'p2', false);
     match.endTurn();
     expect(match.finished).toBe(true);
-    expect(match.result()?.winners[0]?.name).toBe('Pareja 1');
+    expect(match.result()?.winners[0]?.name).toBe('Bocha y Farico');
   });
 
   it('can be configured to leave a tie shared instead of playing on', () => {

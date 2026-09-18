@@ -70,6 +70,10 @@ export class CourtView {
   private readonly markers: Phaser.GameObjects.Image[] = [];
   private ball!: Phaser.GameObjects.Image;
   private ballShadow!: Phaser.GameObjects.Ellipse;
+  /** Points at whoever has the ball, so it is never a guess. */
+  private caret!: Phaser.GameObjects.Triangle;
+  private caretName!: Phaser.GameObjects.Text;
+  private activeFriend: number | null = null;
   private ambientTimer = 0;
 
   constructor(scene: Phaser.Scene, projection: CourtProjection) {
@@ -82,6 +86,7 @@ export class CourtView {
     this.createMarkers();
     this.createFriends();
     this.createBall();
+    this.createCaret();
 
     // Both layers were cropped to their content, so they are drawn at the offset
     // they were cut from.
@@ -127,6 +132,35 @@ export class CourtView {
       this.friendShadows.push(shadow);
       this.friendState.push({ x: 4, y: 0, pose: 'idle0', backView: false, visible: true });
     });
+  }
+
+  /** A caret and a name over the player who currently has the ball. */
+  private createCaret(): void {
+    this.caret = this.add(
+      this.scene.add
+        .triangle(0, 0, 0, 0, 30, 0, 15, 26, 0xf5a81c)
+        .setDepth(DEPTHS.effects)
+        .setVisible(false),
+    );
+    this.caretName = this.add(
+      this.scene.add
+        .text(0, 0, '', {
+          fontFamily: UI_FONT,
+          fontSize: '26px',
+          color: PALETTE.hudText,
+          stroke: '#141008',
+          strokeThickness: 6,
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTHS.effects)
+        .setVisible(false),
+    );
+  }
+
+  /** Marks which friend has the ball, by index, and names them. */
+  setActiveFriend(index: number | null, name = ''): void {
+    this.activeFriend = index;
+    this.caretName.setText(name);
   }
 
   private createBall(): void {
@@ -175,6 +209,12 @@ export class CourtView {
   update(deltaMs: number): void {
     this.ambientTimer += deltaMs;
 
+    const active = this.activeFriend;
+    if (active === null) {
+      this.caret.setVisible(false);
+      this.caretName.setVisible(false);
+    }
+
     this.friends.forEach((image, index) => {
       const state = this.friendState[index];
       if (state === undefined) return;
@@ -196,6 +236,13 @@ export class CourtView {
         ?.setPosition(at.x, at.y)
         .setSize(shadowWidth, shadowWidth * 0.32)
         .setDepth(depthFor(at.depth) - 1);
+
+      if (index === active) {
+        const head = this.projection.project(state.x, state.y, ADULT_HEIGHT_METRES);
+        const bob = Math.sin(this.ambientTimer / 260) * 5;
+        this.caret.setPosition(at.x - 15, head.y - 54 + bob).setVisible(true);
+        this.caretName.setPosition(at.x, head.y - 58 + bob).setVisible(this.caretName.text !== '');
+      }
     });
   }
 

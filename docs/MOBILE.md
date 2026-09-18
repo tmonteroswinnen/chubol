@@ -5,14 +5,32 @@ pantalla de inicio como una app. No hace falta tienda ni cuenta.
 
 ## Cómo probarlo en tu teléfono
 
-1. En la compu: `pnpm build && pnpm preview -- --host`
+1. En la compu: `pnpm build && pnpm celular`
 2. Fijate la IP que imprime (algo como `http://192.168.0.5:4173/`).
 3. Entrá a esa dirección desde el celular, con los dos en la misma red wifi.
-4. En Chrome: menú → *Agregar a pantalla principal*. En iPhone, Safari →
-   compartir → *Agregar a inicio*.
 
-Queda como una app: ícono propio (el aro de tu cancha), pantalla completa, sin
-barra del navegador, y **funciona sin internet** una vez instalada.
+**Ojo con `pnpm preview -- --host`: no funciona.** pnpm le pasa a vite los dos
+argumentos literales `--` y `--host`, así que el flag nunca llega y el servidor
+queda escuchando sólo en `localhost`. Desde el teléfono no carga nada y parece un
+problema de red. Por eso existe `pnpm celular`, que es el mismo preview con
+`--host 0.0.0.0` ya puesto.
+
+## Instalarlo en la pantalla de inicio
+
+Con esto queda como una app: ícono propio (el aro de tu cancha), pantalla
+completa, sin barra del navegador, y funciona sin internet.
+
+Pero **sobre `http://192.168.x.x` no se puede instalar**, y no es un bug del
+juego: el navegador sólo registra un service worker en un *contexto seguro*, que
+es HTTPS o `localhost`. Una IP de red local no es ninguna de las dos. Por wifi el
+juego se abre y se juega perfecto; lo que no anda es instalarlo ni jugar sin
+conexión.
+
+Para que se pueda instalar hace falta servirlo por HTTPS. La forma más corta es
+un túnel (`npx cloudflared tunnel --url http://localhost:4173`), que da una URL
+`https://…` temporal. **Eso publica el juego en internet mientras el túnel esté
+abierto**, así que decidilo vos: el archivo del encargo dice que no lo publique
+por mi cuenta, y no lo hice.
 
 ## Controles con el dedo
 

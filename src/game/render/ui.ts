@@ -82,6 +82,23 @@ export function makeButton(
   };
 }
 
+/**
+ * Full-screen dimmer that goes behind a panel.
+ *
+ * It does two things. It darkens the menu so the panel reads as being on top of
+ * it rather than mixed into it, and — because Phaser only delivers a pointer to
+ * the top-most interactive object — it swallows taps, so the menu buttons the
+ * panel is covering cannot be pressed through it.
+ */
+export function overlayScrim(scene: Phaser.Scene, width: number, height: number): Phaser.GameObjects.Rectangle {
+  const scrim = scene.add.rectangle(0, 0, width, height, 0x0a0d06, 0.78);
+  scrim.setInteractive(
+    new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
+    Phaser.Geom.Rectangle.Contains,
+  );
+  return scrim;
+}
+
 export function panel(
   scene: Phaser.Scene,
   x: number,
@@ -89,7 +106,7 @@ export function panel(
   width: number,
   height: number,
 ): Phaser.GameObjects.Rectangle {
-  return scene.add.rectangle(x, y, width, height, 0x121a10, 0.86).setStrokeStyle(3, 0x6f6244);
+  return scene.add.rectangle(x, y, width, height, 0x121a10, 1).setStrokeStyle(3, 0x6f6244);
 }
 
 export function heading(scene: Phaser.Scene, x: number, y: number, label: string, size = 30): Phaser.GameObjects.Text {
@@ -118,12 +135,15 @@ export function body(
 }
 
 /**
- * Badge shown whenever the scene is running on the procedural stand-in art, so
- * development art is never mistaken for the finished look.
+ * Badge shown while any piece of art is still a procedural stand-in.
+ *
+ * It names what is provisional instead of saying "development art", because the
+ * court itself is the supplied illustration and calling the whole screen a
+ * stand-in would understate how much of it is the real thing.
  */
 export function developmentArtBadge(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
   const text = scene.add
-    .text(0, 0, 'ARTE PROVISIONAL — MODO DESARROLLO', {
+    .text(0, 0, 'LA CANCHA ES LA LÁMINA · JUGADORES Y PELOTA, DIBUJADOS EN CÓDIGO', {
       fontFamily: UI_FONT,
       fontSize: '16px',
       color: '#12180e',

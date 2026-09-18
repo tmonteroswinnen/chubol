@@ -84,10 +84,16 @@ export interface MatchResult {
 
 export type MatchPhase = 'idle' | 'turn' | 'betweenTurns' | 'finished';
 
+/**
+ * The two pairs, named by the owner of the court. Not invented: these are the
+ * names he gave. The order matches the four friends in the artwork, so pair one
+ * is the grey and the white-with-a-sun tanks and pair two is the red and the
+ * black.
+ */
 export function defaultTeams(): [TeamConfig, TeamConfig] {
   return [
-    { name: 'Pareja 1', members: ['Jugador 1', 'Jugador 2'] },
-    { name: 'Pareja 2', members: ['Jugador 3', 'Jugador 4'] },
+    { name: 'Bocha y Farico', members: ['Bocha', 'Farico'] },
+    { name: 'Agus y Facu', members: ['Agus', 'Facu'] },
   ];
 }
 

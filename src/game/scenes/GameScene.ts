@@ -14,6 +14,7 @@ import {
 } from '../config/court';
 import { MOVEMENT, SHOT } from '../config/gameplay';
 import { Match, defaultMatchConfig, type TeamConfig } from '../domain/match';
+import { CPU_DEFAULTS, CpuPlayer, type CpuView } from '../domain/cpu';
 import { PracticeSession } from '../domain/practice';
 import { nearestSpot, spotAt } from '../domain/spots';
 import { ShotSimulation, createShotProfile, launchFromProfile, type ShotProfile } from '../sim/ball';
@@ -54,6 +55,8 @@ const TAP_SNAP_RADIUS = 1.3;
 /** How close is close enough when walking to a tapped point, in metres. */
 const ARRIVAL_RADIUS = 0.06;
 
+const NEWLINE = String.fromCharCode(10);
+
 export class GameScene extends Phaser.Scene {
   private sceneData!: GameSceneData;
   private view!: CourtView;
@@ -65,6 +68,8 @@ export class GameScene extends Phaser.Scene {
   private phase: Phase = 'positioning';
   private shooter = { x: 5, y: 0 };
   private friendIndex = 0;
+  /** Name of the friend holding the ball, fixed for the whole shot cycle. */
+  private activeName = 'Vos';
   private timer = 0;
   private walking = false;
 
@@ -80,6 +85,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Where a tap told the shooter to walk to, if anywhere. */
   private walkTarget: { x: number; y: number } | null = null;
+  /** The pair played by the machine, and which pair the person is playing. */
+  private cpu: CpuPlayer | null = null;
+  private humanTeam: number | null = null;
   private shootButton: HoldButton | null = null;
   private pauseButton: Button | null = null;
 
@@ -122,6 +130,13 @@ export class GameScene extends Phaser.Scene {
         tiebreakMs: this.sceneData.tiebreakMs ?? base.tiebreakMs,
       });
       this.practice = null;
+      this.humanTeam = this.sceneData.humanTeam ?? null;
+      // A fresh seed per match: the settings stay fixed so the rival is always
+      // the same calibre, but it must not play the identical turn every time.
+      this.cpu =
+        this.humanTeam === null
+          ? null
+          : new CpuPlayer({ ...CPU_DEFAULTS, seed: Math.floor(Math.random() * 0x7fffffff) });
       this.match.startTurn();
     } else {
       this.practice = new PracticeSession();
@@ -179,9 +194,51 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Lets the machine play its pair. It issues the same commands a person does —
+   * walk, hold, let go — so it has no advantage: same speed, same clock, same
+   * rule that every mark must be shot before any is repeated.
+   */
+  private updateCpu(deltaMs: number): void {
+    const cpu = this.cpu;
+    const match = this.match;
+    if (cpu === null || match === null) return;
+
+    const owed = SHOT_SPOTS.filter((spot) => match.canShootFrom(spot.id));
+    const spot = this.currentSpot();
+    const view: CpuView = {
+      phase: this.phase,
+      shooterX: this.shooter.x,
+      shooterY: this.shooter.y,
+      ballX: this.ballRest.x,
+      ballY: this.ballRest.y,
+      owed,
+      onMark: spot !== null && this.canShootHere(spot) ? spot : null,
+      charge: this.chargeValue(),
+      window: this.profile?.window ?? null,
+    };
+
+    const command = cpu.decide(view, deltaMs);
+    switch (command.kind) {
+      case 'walk':
+        this.walkTarget = { x: command.x, y: command.y };
+        break;
+      case 'press':
+        this.startCharge();
+        break;
+      case 'release':
+        this.release();
+        break;
+      default:
+        break;
+    }
+  }
+
   /** Sends the shooter walking to a tapped point on the court. */
   private onTapCourt(screenX: number, screenY: number): void {
     if (this.paused) return;
+    // While the machine plays, the court does not answer to a finger.
+    if (this.cpuIsPlaying()) return;
     if (this.phase !== 'positioning' && this.phase !== 'retrieving') return;
 
     const artX = screenX - ART_X;
@@ -212,6 +269,11 @@ export class GameScene extends Phaser.Scene {
   private refreshShootButton(): void {
     const button = this.shootButton;
     if (button === null) return;
+    if (this.cpuIsPlaying()) {
+      button.setEnabled(false);
+      button.setLabel(['JUEGA LA', 'MÁQUINA'].join(NEWLINE));
+      return;
+    }
     if (this.phase === 'charging') {
       button.setEnabled(true);
       button.setLabel('SOLTÁ');
@@ -248,8 +310,17 @@ export class GameScene extends Phaser.Scene {
       soundBoard.unlock();
       soundBoard.toggleMuted();
     });
-    this.keys.shoot.on('down', () => this.startCharge());
-    this.keys.shoot.on('up', () => this.release());
+    this.keys.shoot.on('down', () => {
+      if (!this.cpuIsPlaying()) this.startCharge();
+    });
+    this.keys.shoot.on('up', () => {
+      if (!this.cpuIsPlaying()) this.release();
+    });
+  }
+
+  /** True while the pair currently playing is the one the machine plays. */
+  private cpuIsPlaying(): boolean {
+    return this.cpu !== null && this.match !== null && this.match.currentTeamIndex !== this.humanTeam;
   }
 
   /** The friend on the ball: pairs are friends A+B and C+D. */
@@ -277,6 +348,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.hideBar();
 
     this.friendIndex = this.activeFriendIndex();
+    this.activeName = this.match !== null ? this.match.currentMemberName : 'Vos';
     if (firstOfTurn) {
       const start = SHOT_SPOTS[0]!;
       this.shooter.x = start.x;
@@ -284,16 +356,34 @@ export class GameScene extends Phaser.Scene {
     }
     this.placeWaitingFriends();
     this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose: 'hold', visible: true });
+    this.view.setActiveFriend(this.friendIndex, this.shooterName());
+    this.cpu?.reset();
     this.refreshHud();
+  }
+
+  /**
+   * Who has the ball right now, for the caret and the interface.
+   *
+   * Deliberately not read live off the match: the moment a shot resolves the
+   * match hands the ball to the other one of the pair, but on court it is still
+   * the one who shot who runs after the ball. Reading it live made the caret over
+   * the player and the name in the interface disagree for the whole retrieval.
+   * It is fixed for the length of a shot cycle, alongside `friendIndex`.
+   */
+  private shooterName(): string {
+    return this.activeName;
   }
 
   private refreshHud(): void {
     if (this.match !== null) {
       const team = this.match.currentTeam;
       const extra = this.match.round > 0 ? ` · DESEMPATE ${this.match.round}` : '';
-      this.hud.setTurn(`${team.name.toUpperCase()}${extra} — ${this.match.currentMemberName}`);
+      const who = this.cpuIsPlaying() ? 'JUEGA LA MÁQUINA' : 'TIRÁS VOS';
+      this.hud.setTurn([`${team.name.toUpperCase()}${extra}`, this.activeName, who].join('\n'));
       this.hud.setScore(
-        this.match.config.teams.map((t, i) => `${t.name}: ${this.match!.scoreOf(i)}`).join('   ·   '),
+        this.match.config.teams
+          .map((t, i) => `${t.name}${i === this.humanTeam ? ' (vos)' : ''}: ${this.match!.scoreOf(i)}`)
+          .join('\n'),
       );
       this.hud.setClock(this.match.timeLeft);
       this.hud.setLapMarks(this.match.lapDone, 'YA TIRARON:');
@@ -418,7 +508,7 @@ export class GameScene extends Phaser.Scene {
     if (down(this.keys.up)) dy += 1;
     if (down(this.keys.down)) dy -= 1;
 
-    if (dx !== 0 || dy !== 0) {
+    if ((dx !== 0 || dy !== 0) && !this.cpuIsPlaying()) {
       this.walkTarget = null;
       this.walking = true;
       const length = Math.hypot(dx, dy);
@@ -449,6 +539,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHints(): void {
+    if (this.cpuIsPlaying()) {
+      this.view.highlightSpot(null);
+      this.hud.setHint(`Juega ${this.match?.currentTeam.name ?? 'la otra pareja'} — mirá y esperá tu minuto`);
+      return;
+    }
     const spot = this.currentSpot();
     const index = spot === null ? null : SHOT_SPOTS.findIndex((s) => s.id === spot.id);
     this.view.highlightSpot(index);
@@ -519,6 +614,8 @@ export class GameScene extends Phaser.Scene {
       this.match.tick(delta);
       this.hud.setClock(this.match.timeLeft);
     }
+
+    if (this.cpuIsPlaying()) this.updateCpu(delta);
 
     switch (this.phase) {
       case 'positioning':

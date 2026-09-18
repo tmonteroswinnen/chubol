@@ -54,6 +54,11 @@ fue lo que pediste.
 
 Está marcado así en el código y es configuración, no una afirmación.
 
+0. **Contra quién jugás.** Podés elegir tu pareja y que la otra la maneje la
+   computadora, o pasarse el aparato entre los dos. No dijiste cuál de las dos
+   formas era la del patio, así que están las dos y elegís en el menú. Ver
+   [MAQUINA.md](MAQUINA.md).
+
 1. **Cómo se alternan los dos de la pareja.** Dentro del minuto, los dos integrantes
    se van turnando la pelota: uno tira, después el otro. Si en realidad tiraba
    siempre el mismo, o se elegía libremente, se cambia en `Match.resolveShot()`.
