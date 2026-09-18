@@ -1,5 +1,17 @@
 import Phaser from 'phaser';
-import { BALL, LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, WALK_BOUNDS, WAITING_SPOTS, type ShotSpot } from '../config/court';
+import {
+  ART_HEIGHT,
+  ART_WIDTH,
+  ART_X,
+  ART_Y,
+  BALL,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  SHOT_SPOTS,
+  WAITING_SPOTS,
+  WALK_BOUNDS,
+  type ShotSpot,
+} from '../config/court';
 import { MOVEMENT, SHOT } from '../config/gameplay';
 import { Match, defaultMatchConfig, type TeamConfig } from '../domain/match';
 import { PracticeSession } from '../domain/practice';
@@ -10,7 +22,16 @@ import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
 import { Hud } from '../render/hud';
 import { CHARACTER_KEYS } from '../render/textures';
-import { developmentArtBadge, heading, makeButton, panel, type Button } from '../render/ui';
+import {
+  developmentArtBadge,
+  heading,
+  makeButton,
+  makeHoldButton,
+  makeIconButton,
+  panel,
+  type Button,
+  type HoldButton,
+} from '../render/ui';
 import { usingDevelopmentArt } from '../assets/manifest';
 import type { GameSceneData } from './MenuScene';
 
@@ -26,6 +47,12 @@ type Phase = 'positioning' | 'charging' | 'flight' | 'retrieving' | 'turnBreak' 
 
 /** How close the shooter has to get to pick the ball up again, in metres. */
 const PICKUP_RADIUS = 0.75;
+
+/** A tap this close to a mark walks to the mark itself rather than beside it. */
+const TAP_SNAP_RADIUS = 1.3;
+
+/** How close is close enough when walking to a tapped point, in metres. */
+const ARRIVAL_RADIUS = 0.06;
 
 export class GameScene extends Phaser.Scene {
   private sceneData!: GameSceneData;
@@ -51,6 +78,11 @@ export class GameScene extends Phaser.Scene {
   private feedbackFor = 0;
   private breakFor = 0;
 
+  /** Where a tap told the shooter to walk to, if anywhere. */
+  private walkTarget: { x: number; y: number } | null = null;
+  private shootButton: HoldButton | null = null;
+  private pauseButton: Button | null = null;
+
   private paused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
   private pauseButtons: Button[] = [];
@@ -74,6 +106,7 @@ export class GameScene extends Phaser.Scene {
     this.simulation = null;
     this.profile = null;
     this.lockedSpot = null;
+    this.walkTarget = null;
     this.shotId = 0;
   }
 
@@ -97,9 +130,10 @@ export class GameScene extends Phaser.Scene {
 
     this.beginShotCycle(true);
     this.bindInput();
+    this.buildTouchControls();
 
     if (usingDevelopmentArt()) {
-      developmentArtBadge(this, LOGICAL_WIDTH - 210, 26).setDepth(DEPTHS.hud);
+      developmentArtBadge(this, ART_X + 200, 24).setDepth(DEPTHS.hud);
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
@@ -109,8 +143,89 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.removeAllListeners();
     this.input.removeAllListeners();
     this.closePause();
+    this.shootButton?.destroy();
+    this.shootButton = null;
+    this.pauseButton?.destroy();
+    this.pauseButton = null;
     this.hud.destroy();
     this.simulation = null;
+  }
+
+  /**
+   * Touch controls. There are only seven places to shoot from, so this needs no
+   * virtual joystick: you tap a mark to walk to it, hold the button to charge and
+   * let go to shoot. The keyboard keeps working alongside it.
+   */
+  private buildTouchControls(): void {
+    this.shootButton = makeHoldButton(
+      this,
+      Hud.RIGHT_COLUMN,
+      860,
+      168,
+      'TIRAR',
+      () => this.startCharge(),
+      () => this.release(),
+    );
+    this.shootButton.container.setDepth(DEPTHS.hud + 5);
+
+    this.pauseButton = makeIconButton(this, Hud.RIGHT_COLUMN, 64, 84, 'II', () => this.togglePause());
+    this.pauseButton.container.setDepth(DEPTHS.hud + 5);
+
+    // A tap on the artwork itself walks. The buttons live in the margins, so
+    // they can never be confused with a tap on the court.
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      soundBoard.unlock();
+      this.onTapCourt(pointer.x, pointer.y);
+    });
+  }
+
+  /** Sends the shooter walking to a tapped point on the court. */
+  private onTapCourt(screenX: number, screenY: number): void {
+    if (this.paused) return;
+    if (this.phase !== 'positioning' && this.phase !== 'retrieving') return;
+
+    const artX = screenX - ART_X;
+    const artY = screenY - ART_Y;
+    if (artX < 0 || artY < 0 || artX > ART_WIDTH || artY > ART_HEIGHT) return;
+
+    const world = courtProjection().groundFromScreen(artX, artY);
+    if (world === null) return;
+
+    // While fetching, a tap anywhere near the ball means "go and get it".
+    if (this.phase === 'retrieving' && Math.hypot(world.x - this.ballRest.x, world.y - this.ballRest.y) < 1.6) {
+      this.walkTarget = { x: this.ballRest.x, y: this.ballRest.y };
+      return;
+    }
+
+    // Otherwise, a tap near a mark walks onto the mark, not next to it.
+    const near = nearestSpot(world.x, world.y);
+    this.walkTarget =
+      near.distance <= TAP_SNAP_RADIUS
+        ? { x: near.spot.x, y: near.spot.y }
+        : {
+            x: Phaser.Math.Clamp(world.x, WALK_BOUNDS.minX, WALK_BOUNDS.maxX),
+            y: Phaser.Math.Clamp(world.y, WALK_BOUNDS.minY, WALK_BOUNDS.maxY),
+          };
+  }
+
+  /** Keeps the shoot button showing whether a shot is available right now. */
+  private refreshShootButton(): void {
+    const button = this.shootButton;
+    if (button === null) return;
+    if (this.phase === 'charging') {
+      button.setEnabled(true);
+      button.setLabel('SOLTÁ');
+      return;
+    }
+    if (this.phase !== 'positioning') {
+      button.setEnabled(false);
+      button.setLabel(this.phase === 'retrieving' ? ['BUSCÁ LA', 'PELOTA'].join('\n') : 'TIRAR');
+      return;
+    }
+    const spot = this.currentSpot();
+    const ready = spot !== null && this.canShootHere(spot);
+    button.setEnabled(ready);
+    button.setLabel(ready ? ['TIRAR', String(spot!.points)].join('\n') : ['ANDÁ A', 'UNA MARCA'].join('\n'));
   }
 
   private bindInput(): void {
@@ -135,12 +250,6 @@ export class GameScene extends Phaser.Scene {
     });
     this.keys.shoot.on('down', () => this.startCharge());
     this.keys.shoot.on('up', () => this.release());
-
-    this.input.on('pointerdown', () => {
-      soundBoard.unlock();
-      this.startCharge();
-    });
-    this.input.on('pointerup', () => this.release());
   }
 
   /** The friend on the ball: pairs are friends A+B and C+D. */
@@ -164,6 +273,7 @@ export class GameScene extends Phaser.Scene {
     this.profile = null;
     this.lockedSpot = null;
     this.simulation = null;
+    this.walkTarget = null;
     this.hud.hideBar();
 
     this.friendIndex = this.activeFriendIndex();
@@ -215,7 +325,7 @@ export class GameScene extends Phaser.Scene {
     this.lockedSpot = spot;
     this.chargeElapsed = 0;
     this.phase = 'charging';
-    this.hud.showBar(profile.window.low, profile.window.high, `MARCA DE ${spot.points} · SOLTÁ EN LA FRANJA`);
+    this.hud.showBar(profile.window.low, profile.window.high, `MARCA DE ${spot.points}`);
     this.view.setFriend(this.friendIndex, { pose: 'wind' });
   }
 
@@ -291,7 +401,14 @@ export class GameScene extends Phaser.Scene {
     this.hud.setHint('SE TERMINÓ EL MINUTO — CAMBIO DE PAREJA');
   }
 
+  /**
+   * Moves the shooter. Two ways in, both always available: the keys steer
+   * directly, and a tap on the court sets a point to walk to. Touching the keys
+   * cancels a tapped destination, so the two never fight each other.
+   */
   private movePlayer(deltaMs: number): void {
+    const step = (MOVEMENT.speed * deltaMs) / 1000;
+
     let dx = 0;
     let dy = 0;
     const down = (keys: Phaser.Input.Keyboard.Key[]) => keys.some((k) => k.isDown);
@@ -301,13 +418,34 @@ export class GameScene extends Phaser.Scene {
     if (down(this.keys.up)) dy += 1;
     if (down(this.keys.down)) dy -= 1;
 
-    this.walking = dx !== 0 || dy !== 0;
-    if (!this.walking) return;
+    if (dx !== 0 || dy !== 0) {
+      this.walkTarget = null;
+      this.walking = true;
+      const length = Math.hypot(dx, dy);
+      this.shooter.x = Phaser.Math.Clamp(this.shooter.x + (dx / length) * step, WALK_BOUNDS.minX, WALK_BOUNDS.maxX);
+      this.shooter.y = Phaser.Math.Clamp(this.shooter.y + (dy / length) * step, WALK_BOUNDS.minY, WALK_BOUNDS.maxY);
+      return;
+    }
 
-    const length = Math.hypot(dx, dy) || 1;
-    const step = (MOVEMENT.speed * deltaMs) / 1000;
-    this.shooter.x = Phaser.Math.Clamp(this.shooter.x + (dx / length) * step, WALK_BOUNDS.minX, WALK_BOUNDS.maxX);
-    this.shooter.y = Phaser.Math.Clamp(this.shooter.y + (dy / length) * step, WALK_BOUNDS.minY, WALK_BOUNDS.maxY);
+    const target = this.walkTarget;
+    if (target === null) {
+      this.walking = false;
+      return;
+    }
+
+    const toX = target.x - this.shooter.x;
+    const toY = target.y - this.shooter.y;
+    const distance = Math.hypot(toX, toY);
+    if (distance <= Math.max(ARRIVAL_RADIUS, step)) {
+      this.shooter.x = target.x;
+      this.shooter.y = target.y;
+      this.walkTarget = null;
+      this.walking = false;
+      return;
+    }
+    this.walking = true;
+    this.shooter.x = Phaser.Math.Clamp(this.shooter.x + (toX / distance) * step, WALK_BOUNDS.minX, WALK_BOUNDS.maxX);
+    this.shooter.y = Phaser.Math.Clamp(this.shooter.y + (toY / distance) * step, WALK_BOUNDS.minY, WALK_BOUNDS.maxY);
   }
 
   private updateHints(): void {
@@ -317,14 +455,14 @@ export class GameScene extends Phaser.Scene {
 
     if (spot === null) {
       const near = nearestSpot(this.shooter.x, this.shooter.y);
-      this.hud.setHint(`Andá a una marca que falte (la de ${near.spot.points} está a ${near.distance.toFixed(1)} m)`);
+      this.hud.setHint(`Tocá una marca para ir (la de ${near.spot.points} está a ${near.distance.toFixed(1)} m)`);
       return;
     }
     if (!this.canShootHere(spot)) {
       this.hud.setHint(`La marca de ${spot.points} ya la tiraron en esta vuelta — faltan las otras`);
       return;
     }
-    this.hud.setHint(`MARCA DE ${spot.points} — mantené ESPACIO y soltá en la franja`);
+    this.hud.setHint(`MARCA DE ${spot.points} — mantené TIRAR y soltá en la franja verde`);
   }
 
   private togglePause(): void {
@@ -411,6 +549,7 @@ export class GameScene extends Phaser.Scene {
       this.endTurn();
     }
 
+    this.refreshShootButton();
     this.view.update(delta);
   }
 
@@ -465,7 +604,7 @@ export class GameScene extends Phaser.Scene {
     this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose });
 
     const distance = Math.hypot(this.shooter.x - this.ballRest.x, this.shooter.y - this.ballRest.y);
-    this.hud.setHint(`Andá a buscar la pelota — ${distance.toFixed(1)} m (el reloj corre)`);
+    this.hud.setHint(`Tocá la pelota para ir a buscarla — ${distance.toFixed(1)} m (el reloj corre)`);
 
     if (distance <= PICKUP_RADIUS) {
       soundBoard.bounce();

@@ -12,7 +12,7 @@
  */
 
 import Phaser from 'phaser';
-import { BALL, SHOT_SPOTS } from '../config/court';
+import { ART_X, ART_Y, BALL, LAYER_OFFSETS, SHOT_SPOTS } from '../config/court';
 import type { CourtProjection } from '../sim/projection';
 import { IDLE_CYCLE, WALK_CYCLE, type PoseName } from './characters';
 import {
@@ -56,6 +56,13 @@ export interface FriendState {
 export class CourtView {
   readonly scene: Phaser.Scene;
   readonly projection: CourtProjection;
+  /**
+   * Everything in the world lives in this container, positioned at the top-left
+   * of the artwork. So the rest of the class can work in artwork coordinates —
+   * which is what the projection produces — and the margins stay free for the
+   * interface.
+   */
+  private readonly root: Phaser.GameObjects.Container;
 
   private readonly friends: Phaser.GameObjects.Image[] = [];
   private readonly friendShadows: Phaser.GameObjects.Ellipse[] = [];
@@ -68,22 +75,41 @@ export class CourtView {
   constructor(scene: Phaser.Scene, projection: CourtProjection) {
     this.scene = scene;
     this.projection = projection;
+    this.root = scene.add.container(ART_X, ART_Y);
 
-    scene.add.image(0, 0, TEXTURE_KEYS.plate).setOrigin(0, 0).setDepth(DEPTHS.plate);
+    this.add(scene.add.image(0, 0, TEXTURE_KEYS.plate).setOrigin(0, 0).setDepth(DEPTHS.plate));
 
     this.createMarkers();
     this.createFriends();
     this.createBall();
 
-    scene.add.image(0, 0, TEXTURE_KEYS.hoopFront).setOrigin(0, 0).setDepth(DEPTHS.hoopFront);
-    scene.add.image(0, 0, TEXTURE_KEYS.plateForeground).setOrigin(0, 0).setDepth(DEPTHS.foreground);
+    // Both layers were cropped to their content, so they are drawn at the offset
+    // they were cut from.
+    this.add(
+      scene.add
+        .image(LAYER_OFFSETS.hoopFront.x, LAYER_OFFSETS.hoopFront.y, TEXTURE_KEYS.hoopFront)
+        .setOrigin(0, 0)
+        .setDepth(DEPTHS.hoopFront),
+    );
+    this.add(
+      scene.add
+        .image(LAYER_OFFSETS.foreground.x, LAYER_OFFSETS.foreground.y, TEXTURE_KEYS.plateForeground)
+        .setOrigin(0, 0)
+        .setDepth(DEPTHS.foreground),
+    );
+  }
+
+  /** Puts a display object into the world container, in artwork coordinates. */
+  private add<T extends Phaser.GameObjects.GameObject>(object: T): T {
+    this.root.add(object);
+    return object;
   }
 
   private createMarkers(): void {
     for (const spot of SHOT_SPOTS) {
       const at = this.projection.project(spot.x, spot.y, 0);
-      const marker = this.scene.add
-        .image(at.x, at.y, TEXTURE_KEYS.spotMarker)
+      const marker = this.add(this.scene.add
+        .image(at.x, at.y, TEXTURE_KEYS.spotMarker))
         .setScale((at.scale * spot.tolerance * 2) / 120)
         .setDepth(DEPTHS.marker)
         .setAlpha(0.3);
@@ -93,10 +119,10 @@ export class CourtView {
 
   private createFriends(): void {
     CHARACTER_KEYS.forEach((key) => {
-      const image = this.scene.add
+      const image = this.add(this.scene.add
         .image(0, 0, characterTextureKey(key), 'idle0')
-        .setOrigin(CHARACTER_ORIGIN_X, CHARACTER_ORIGIN_Y);
-      const shadow = this.scene.add.ellipse(0, 0, 10, 5, 0x142810, 0.34).setDepth(DEPTHS.shadow);
+        .setOrigin(CHARACTER_ORIGIN_X, CHARACTER_ORIGIN_Y));
+      const shadow = this.add(this.scene.add.ellipse(0, 0, 10, 5, 0x142810, 0.34).setDepth(DEPTHS.shadow));
       this.friends.push(image);
       this.friendShadows.push(shadow);
       this.friendState.push({ x: 4, y: 0, pose: 'idle0', backView: false, visible: true });
@@ -104,8 +130,8 @@ export class CourtView {
   }
 
   private createBall(): void {
-    this.ballShadow = this.scene.add.ellipse(0, 0, 10, 5, 0x142810, 0.36).setDepth(DEPTHS.shadow);
-    this.ball = this.scene.add.image(0, 0, ballTextureKey(0)).setDepth(depthFor(20));
+    this.ballShadow = this.add(this.scene.add.ellipse(0, 0, 10, 5, 0x142810, 0.36).setDepth(DEPTHS.shadow));
+    this.ball = this.add(this.scene.add.image(0, 0, ballTextureKey(0)).setDepth(depthFor(20)));
   }
 
   setMarkersVisible(visible: boolean): void {
@@ -176,7 +202,7 @@ export class CourtView {
   /** Floating score text at a world position. */
   popScore(x: number, y: number, label: string, good: boolean): void {
     const at = this.projection.project(x, y, 2.2);
-    const text = this.scene.add
+    const text = this.add(this.scene.add
       .text(at.x, at.y, label, {
         fontFamily: UI_FONT,
         fontSize: '44px',
@@ -185,7 +211,7 @@ export class CourtView {
         strokeThickness: 7,
       })
       .setOrigin(0.5)
-      .setDepth(DEPTHS.effects);
+      .setDepth(DEPTHS.effects));
     this.scene.tweens.add({
       targets: text,
       y: at.y - 62,

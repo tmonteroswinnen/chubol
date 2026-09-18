@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOOP, LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, WALK_BOUNDS } from '../src/game/config/court';
+import { ART_HEIGHT, ART_WIDTH, HOOP, SHOT_SPOTS, WALK_BOUNDS } from '../src/game/config/court';
 import { courtProjection } from '../src/game/render/context';
 
 const projection = courtProjection();
@@ -38,11 +38,11 @@ describe('court projection, calibrated to the supplied plate', () => {
   it('keeps the hoop on the left and the play space extending to the right', () => {
     const hoop = projection.project(HOOP.groundX, HOOP.groundY, 0);
     const farEnd = projection.project(WALK_BOUNDS.maxX, 0, 0);
-    expect(hoop.x).toBeLessThan(LOGICAL_WIDTH / 3);
+    expect(hoop.x).toBeLessThan(ART_WIDTH / 3);
     expect(farEnd.x).toBeGreaterThan(hoop.x);
   });
 
-  it('keeps the whole walkable area inside the frame', () => {
+  it('keeps the whole walkable area inside the artwork', () => {
     const corners = [
       [WALK_BOUNDS.minX, WALK_BOUNDS.minY],
       [WALK_BOUNDS.maxX, WALK_BOUNDS.minY],
@@ -52,9 +52,9 @@ describe('court projection, calibrated to the supplied plate', () => {
     for (const [x, y] of corners) {
       const at = projection.project(x, y, 0);
       expect(at.x, `corner ${x},${y}`).toBeGreaterThanOrEqual(0);
-      expect(at.x, `corner ${x},${y}`).toBeLessThanOrEqual(LOGICAL_WIDTH);
+      expect(at.x, `corner ${x},${y}`).toBeLessThanOrEqual(ART_WIDTH);
       expect(at.y, `corner ${x},${y}`).toBeGreaterThanOrEqual(0);
-      expect(at.y, `corner ${x},${y}`).toBeLessThanOrEqual(LOGICAL_HEIGHT);
+      expect(at.y, `corner ${x},${y}`).toBeLessThanOrEqual(ART_HEIGHT);
     }
   });
 
@@ -94,7 +94,7 @@ describe('court projection, calibrated to the supplied plate', () => {
   });
 
   it('returns no ground point above the horizon', () => {
-    expect(projection.groundFromScreen(LOGICAL_WIDTH / 2, projection.horizonY() - 10)).toBeNull();
+    expect(projection.groundFromScreen(ART_WIDTH / 2, projection.horizonY() - 10)).toBeNull();
   });
 
   it('does not move a shot spot when the browser window changes size', () => {

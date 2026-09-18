@@ -8,6 +8,9 @@ que ir a buscar la pelota mientras el reloj corre.
 El juego corre **adentro de tu arte**: la lámina de la cancha es el fondo real, y
 la cámara está calibrada contra ella con 5,5 px de error sobre el suelo.
 
+Se juega en la compu con teclado y en el **celular con el dedo**, y se puede
+instalar en la pantalla de inicio como una app que anda sin internet.
+
 > **Falta todavía:** los sprites de los cuatro amigos y de la pelota de juego. Hasta
 > que existan, el juego los dibuja provisionalmente por código y lo dice en
 > pantalla. Ver [`docs/ASSET_REQUESTS.md`](docs/ASSET_REQUESTS.md).
@@ -30,6 +33,9 @@ pnpm preview      # sirve dist/ en http://localhost:4173
 pnpm typecheck    # sólo verificación de tipos
 pnpm test         # pruebas de reglas, física y proyección (sin renderer)
 pnpm capture      # capturas reales del juego + revisión de consola
+pnpm capture:mobile  # capturas en cuatro tamaños de celular y tablet
+pnpm test:touch      # juega un tiro completo con toques reales, sin teclado
+pnpm test:pwa        # manifest, service worker y arranque sin conexión
 ```
 
 `pnpm capture` necesita el build servido con `pnpm preview` en otra terminal. Usa
@@ -38,14 +44,19 @@ cualquier error, advertencia o recurso roto en la consola**.
 
 ## Controles
 
+En la compu:
+
 | Acción | Tecla |
 |---|---|
 | Mover al jugador activo | `W A S D` o flechas |
-| Preparar el tiro | mantener `ESPACIO` (o el botón del mouse) |
+| Preparar el tiro | mantener `ESPACIO` |
 | Lanzar | soltar `ESPACIO` |
 | Pausa | `ESC` |
 | Silenciar | `M` |
 | Ocultar interfaz (en comparación) | `H` |
+
+En el celular, con el dedo: tocás una marca para ir, mantenés **TIRAR** y soltás,
+y tocás la pelota para ir a buscarla. Ver [`docs/MOBILE.md`](docs/MOBILE.md).
 
 Soltá cuando la aguja esté dentro de la franja verde. **Si soltás adentro, entra.**
 La franja es el intervalo de acierto real de la física, no una aproximación, y se
@@ -92,6 +103,7 @@ amplía una zona con una grilla, que es como se midieron los puntos de referenci
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, proyección, máquina de estados, física |
 | [`docs/ASSET_REQUESTS.md`](docs/ASSET_REQUESTS.md) | Qué falta producir, con especificaciones exactas |
 | [`docs/ASSET_MANIFEST.md`](docs/ASSET_MANIFEST.md) | Tabla de recursos y estado |
+| [`docs/MOBILE.md`](docs/MOBILE.md) | Versión para celular: controles táctiles, instalación, sin conexión |
 | [`docs/CHUBOL-CONTINUAR.md`](docs/CHUBOL-CONTINUAR.md) | Tus instrucciones con el paquete de arte |
 
 ## Falta definir

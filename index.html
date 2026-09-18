@@ -2,30 +2,51 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>CHUBOL</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%234c8b3d'/%3E%3Ccircle cx='8' cy='8' r='5' fill='%23e07a2c'/%3E%3C/svg%3E"
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <title>CHUBOL</title>
+    <meta name="description" content="Básquet de patio: de a dos, un minuto por pareja, siete marcas." />
+    <meta name="theme-color" content="#14100d" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CHUBOL" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/ui/icon-192.png" />
+    <link rel="apple-touch-icon" href="assets/ui/icon-192.png" />
     <style>
-      :root { color-scheme: dark; }
-      html, body {
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
         margin: 0;
         padding: 0;
         height: 100%;
         background: #14100d;
         overflow: hidden;
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        overscroll-behavior: none;
+        font-family: Consolas, "Courier New", monospace;
+        /* A finger dragging on the court must never scroll or select the page. */
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
         -webkit-text-size-adjust: 100%;
       }
       #game {
         width: 100vw;
         height: 100vh;
+        height: 100dvh;
         display: grid;
         place-items: center;
       }
-      #game canvas { display: block; touch-action: none; }
+      #game canvas {
+        display: block;
+        touch-action: none;
+      }
       #boot-msg {
         position: absolute;
         inset: 0;
@@ -35,10 +56,78 @@
         letter-spacing: 0.14em;
         font-size: 14px;
       }
+
+      /*
+        The artwork is 3:2 and must not be cropped, so a phone held upright has
+        nowhere to put it. Rather than shrink the court to a stamp, ask for the
+        phone to be turned. Only on touch screens: a narrow desktop window is
+        still perfectly playable.
+      */
+      #rotate {
+        display: none;
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #game {
+          display: none;
+        }
+        #rotate {
+          position: fixed;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          padding: calc(24px + env(safe-area-inset-top, 0px)) 28px;
+          text-align: center;
+          color: #f3ead2;
+          background: #14100d;
+        }
+        #rotate .phone {
+          width: 74px;
+          height: 120px;
+          margin: 0 auto 26px;
+          border: 5px solid #f5a81c;
+          border-radius: 12px;
+          animation: turn 2.2s ease-in-out infinite;
+        }
+        #rotate h1 {
+          margin: 0 0 10px;
+          font-size: 22px;
+          letter-spacing: 0.1em;
+          color: #f5a81c;
+        }
+        #rotate p {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.5;
+          opacity: 0.85;
+        }
+      }
+      @keyframes turn {
+        0%,
+        40% {
+          transform: rotate(0deg);
+        }
+        60%,
+        100% {
+          transform: rotate(-90deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #rotate .phone {
+          animation: none;
+          transform: rotate(-90deg);
+        }
+      }
     </style>
   </head>
   <body>
     <div id="game"><div id="boot-msg">CARGANDO CHUBOL…</div></div>
+    <div id="rotate" role="alert">
+      <div>
+        <div class="phone" aria-hidden="true"></div>
+        <h1>GIRÁ EL TELÉFONO</h1>
+        <p>CHUBOL se juega apaisado.<br />La cancha no entra de otra forma.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -17,6 +17,38 @@
 import { mkdirSync } from 'node:fs';
 import { readPng, writePng } from './png.mjs';
 
+/**
+ * Crops a full-frame RGBA buffer down to the box that actually has pixels in it.
+ *
+ * Both layers are mostly empty — the hoop front is about 1300 opaque pixels in a
+ * 1536 x 1024 frame — and a phone would otherwise carry six megabytes of texture
+ * for each. The offset comes back so the game can draw the crop in the right
+ * place.
+ */
+function cropToContent(pixels, width, height) {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (pixels[(y * width + x) * 4 + 3] === 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) throw new Error('layer is completely empty');
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  const out = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y += 1) {
+    pixels.copy(out, y * w * 4, ((minY + y) * width + minX) * 4, ((minY + y) * width + minX + w) * 4);
+  }
+  return { pixels: out, x: minX, y: minY, width: w, height: h };
+}
+
 const PLATE = 'public/assets/backgrounds/chubol-court-clean-v1.png';
 const OUT_DIR = 'public/assets/backgrounds';
 const PROPS_DIR = 'public/assets/props';
@@ -53,8 +85,12 @@ for (let y = 0; y < height; y += 1) {
     foregroundPixels += 1;
   }
 }
-writePng(`${OUT_DIR}/court-foreground.png`, width, height, foreground);
-console.log(`court-foreground.png  ${foregroundPixels} opaque pixels (${((foregroundPixels / (width * height)) * 100).toFixed(1)}% of the frame)`);
+const fg = cropToContent(foreground, width, height);
+writePng(`${OUT_DIR}/court-foreground.png`, fg.width, fg.height, fg.pixels);
+console.log(
+  `court-foreground.png  ${foregroundPixels} opaque pixels, cropped to ${fg.width}x${fg.height} at (${fg.x}, ${fg.y})  ` +
+    `${((fg.width * fg.height * 4) / 1048576).toFixed(2)} MB of texture`,
+);
 
 /* ------------------------------------------------------------------ */
 /* Hoop front: the near half of the rim and the chain net              */
@@ -98,5 +134,16 @@ for (let y = RIM.cy; y <= NET.bottom; y += 1) {
     hoopPixels += 1;
   }
 }
-writePng(`${PROPS_DIR}/hoop-front.png`, width, height, hoopFront);
-console.log(`hoop-front.png        ${hoopPixels} opaque pixels`);
+const hf = cropToContent(hoopFront, width, height);
+writePng(`${PROPS_DIR}/hoop-front.png`, hf.width, hf.height, hf.pixels);
+console.log(
+  `hoop-front.png        ${hoopPixels} opaque pixels, cropped to ${hf.width}x${hf.height} at (${hf.x}, ${hf.y})  ` +
+    `${((hf.width * hf.height * 4) / 1048576).toFixed(2)} MB of texture`,
+);
+
+console.log('');
+console.log('--- paste into src/game/config/court.ts ---');
+console.log(`export const LAYER_OFFSETS = {`);
+console.log(`  foreground: { x: ${fg.x}, y: ${fg.y} },`);
+console.log(`  hoopFront: { x: ${hf.x}, y: ${hf.y} },`);
+console.log(`} as const;`);

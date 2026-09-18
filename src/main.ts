@@ -36,3 +36,16 @@ declare global {
   }
 }
 window.__chubol = { game };
+
+/**
+ * Registers the service worker so the game keeps working with no connection
+ * once it has been added to a phone's home screen. It is generated at build
+ * time, so there is nothing to register in development.
+ */
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      // An unavailable service worker only costs offline play, never the game.
+    });
+  });
+}

@@ -31,9 +31,36 @@
 
 import type { CameraSetup, FramingRect, Vec3 } from '../sim/projection';
 
-/** Logical canvas size. Fixed, and equal to the supplied plate (1536 x 1024). */
-export const LOGICAL_WIDTH = 1536;
+/**
+ * The artwork is 1536 x 1024 and must never be stretched or cropped. The logical
+ * canvas is deliberately WIDER: a phone held sideways is far wider than 3:2, so
+ * the artwork would otherwise sit between two dead black bars. Making the canvas
+ * 1920 wide turns those bars into usable margins that carry the clock, the score
+ * and the shoot button, which keeps the interface off the artwork entirely.
+ *
+ * The canvas size is still fixed, so the scale manager letterboxes it and a
+ * resize can never move a shot mark.
+ */
+export const ART_WIDTH = 1536;
+export const ART_HEIGHT = 1024;
+export const LOGICAL_WIDTH = 1920;
 export const LOGICAL_HEIGHT = 1024;
+/** Where the artwork sits inside the canvas. */
+export const ART_X = (LOGICAL_WIDTH - ART_WIDTH) / 2;
+export const ART_Y = 0;
+/** Width of each side margin, where the interface lives. */
+export const MARGIN_WIDTH = ART_X;
+
+/**
+ * Where each cut layer sits inside the artwork. Both were cropped down to the
+ * pixels they actually contain, which took them from six megabytes of texture
+ * each to 1.38 MB and 0.03 MB — that matters on a phone. Regenerate with
+ * `node scripts/cutLayers.mjs`, which prints these values.
+ */
+export const LAYER_OFFSETS = {
+  foreground: { x: 0, y: 789 },
+  hoopFront: { x: 247, y: 270 },
+} as const;
 
 /**
  * Solved camera. Do not hand-tune: re-run `node scripts/fitCamera.mjs` and paste

@@ -7,7 +7,7 @@ import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
 import { soundBoard } from '../render/audio';
 import { PALETTE } from '../render/palette';
-import { body, developmentArtBadge, heading, makeButton, panel, UI_FONT, type Button } from '../render/ui';
+import { body, developmentArtBadge, heading, isTouchDevice, makeButton, panel, UI_FONT, type Button } from '../render/ui';
 import { REFERENCE_BALL, REFERENCE_POSES } from './referencePose';
 
 export type GameMode = 'practice' | 'challenge';
@@ -42,7 +42,7 @@ export class MenuScene extends Phaser.Scene {
     this.buildMenu();
 
     if (usingDevelopmentArt()) {
-      developmentArtBadge(this, LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - 26).setDepth(DEPTHS.hud);
+      developmentArtBadge(this, LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - 24).setDepth(DEPTHS.hud);
     }
 
     this.input.keyboard?.on('keydown-ESC', () => this.closeOverlay());
@@ -99,12 +99,15 @@ export class MenuScene extends Phaser.Scene {
     ) ?? null;
     this.refreshSoundLabel();
 
+    const controls = isTouchDevice(this)
+      ? 'Tocá una marca para ir   ·   Mantené TIRAR y soltá en la franja verde   ·   Pausa arriba a la derecha'
+      : 'Mover: WASD o flechas   ·   Tirar: mantener ESPACIO y soltar   ·   Pausa: ESC';
+    const controlsText = this.add
+      .text(x, LOGICAL_HEIGHT - 84, controls, { fontFamily: UI_FONT, fontSize: '19px', color: PALETTE.hudText })
+      .setOrigin(0.5)
+      .setDepth(DEPTHS.hud + 1);
     this.add
-      .text(x, LOGICAL_HEIGHT - 76, 'Mover: WASD o flechas   ·   Tirar: mantener ESPACIO y soltar   ·   Pausa: ESC', {
-        fontFamily: UI_FONT,
-        fontSize: '18px',
-        color: PALETTE.hudText,
-      })
+      .rectangle(x, LOGICAL_HEIGHT - 84, controlsText.width + 40, 40, 0x0f1409, 0.72)
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud);
   }

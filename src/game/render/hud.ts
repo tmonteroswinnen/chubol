@@ -1,5 +1,14 @@
 import Phaser from 'phaser';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, type SpotId } from '../config/court';
+import {
+  ART_HEIGHT,
+  ART_WIDTH,
+  ART_X,
+  ART_Y,
+  LOGICAL_WIDTH,
+  MARGIN_WIDTH,
+  SHOT_SPOTS,
+  type SpotId,
+} from '../config/court';
 import { DEPTHS } from './courtView';
 import { PALETTE } from './palette';
 import { UI_FONT } from './ui';
@@ -7,83 +16,117 @@ import { UI_FONT } from './ui';
 /**
  * In-game interface.
  *
- * It stays out of the way of the artwork: a thin strip along the bottom, and a
- * charge bar that only appears while a shot is being prepared. No large corner
- * panels, no turbo meters.
+ * It lives in the margins beside the artwork, not on top of it. The canvas is
+ * wider than the 3:2 plate precisely so those margins exist: on a phone held
+ * sideways they would otherwise be dead black bars.
+ *
+ * The charge bar is vertical and sits directly above the shoot button, so on a
+ * phone the thumb and the eye are in the same place.
  */
 export class Hud {
   private readonly root: Phaser.GameObjects.Container;
-  private readonly strip: Phaser.GameObjects.Rectangle;
+
+  private readonly clockText: Phaser.GameObjects.Text;
   private readonly turnText: Phaser.GameObjects.Text;
+  private readonly lapTitle: Phaser.GameObjects.Text;
+  private readonly lapTexts: Phaser.GameObjects.Text[] = [];
   private readonly scoreText: Phaser.GameObjects.Text;
   private readonly hintText: Phaser.GameObjects.Text;
-  private readonly clockText: Phaser.GameObjects.Text;
-  private readonly lapText: Phaser.GameObjects.Text;
 
   private readonly barRoot: Phaser.GameObjects.Container;
-  private readonly barBack: Phaser.GameObjects.Rectangle;
   private readonly barBand: Phaser.GameObjects.Rectangle;
   private readonly barNeedle: Phaser.GameObjects.Rectangle;
   private readonly barLabel: Phaser.GameObjects.Text;
 
-  private static readonly BAR_WIDTH = 460;
-  private static readonly BAR_HEIGHT = 26;
+  static readonly BAR_HEIGHT = 400;
+  private static readonly BAR_WIDTH = 46;
+  /** Centre of the right margin. */
+  static readonly RIGHT_COLUMN = LOGICAL_WIDTH - MARGIN_WIDTH / 2;
+  private static readonly BAR_BOTTOM = 690;
 
   constructor(scene: Phaser.Scene) {
-    const stripHeight = 58;
-    const stripY = LOGICAL_HEIGHT - stripHeight / 2;
+    const left = MARGIN_WIDTH / 2;
 
-    this.strip = scene.add.rectangle(LOGICAL_WIDTH / 2, stripY, LOGICAL_WIDTH, stripHeight, 0x121a10, 0.74);
+    this.clockText = scene.add
+      .text(left, 52, '', { fontFamily: UI_FONT, fontSize: '52px', color: PALETTE.hudAccent })
+      .setOrigin(0.5);
     this.turnText = scene.add
-      .text(28, stripY, '', { fontFamily: UI_FONT, fontSize: '22px', color: PALETTE.hudAccent })
-      .setOrigin(0, 0.5);
-    this.scoreText = scene.add
-      .text(LOGICAL_WIDTH - 28, stripY, '', { fontFamily: UI_FONT, fontSize: '22px', color: PALETTE.hudText })
-      .setOrigin(1, 0.5);
-    this.hintText = scene.add
-      .text(LOGICAL_WIDTH / 2, stripY, '', { fontFamily: UI_FONT, fontSize: '19px', color: PALETTE.hudText })
+      .text(left, 96, '', {
+        fontFamily: UI_FONT,
+        fontSize: '19px',
+        color: PALETTE.hudText,
+        align: 'center',
+        wordWrap: { width: MARGIN_WIDTH - 18 },
+      })
+      .setOrigin(0.5, 0);
+
+    this.lapTitle = scene.add
+      .text(left, 206, '', { fontFamily: UI_FONT, fontSize: '16px', color: PALETTE.hudAccent, align: 'center' })
       .setOrigin(0.5);
 
-    // Clock and lap tracker sit at the top left, over the trees: the CHUBOL logo
-    // is painted into the artwork at the top centre and must not be covered.
-    this.clockText = scene.add
-      .text(28, 44, '', {
+    SHOT_SPOTS.forEach((spot, index) => {
+      this.lapTexts.push(
+        scene.add
+          .text(left, 248 + index * 46, String(spot.points), {
+            fontFamily: UI_FONT,
+            fontSize: '30px',
+            color: PALETTE.hudText,
+          })
+          .setOrigin(0.5),
+      );
+    });
+
+    this.scoreText = scene.add
+      .text(left, 600, '', {
         fontFamily: UI_FONT,
-        fontSize: '42px',
-        color: PALETTE.hudAccent,
-        stroke: '#141008',
-        strokeThickness: 7,
+        fontSize: '20px',
+        color: PALETTE.hudText,
+        align: 'center',
+        wordWrap: { width: MARGIN_WIDTH - 18 },
       })
-      .setOrigin(0, 0.5);
-    this.lapText = scene.add
-      .text(28, 90, '', {
+      .setOrigin(0.5, 0);
+
+    // One discreet strip along the very bottom of the artwork, over the bushes.
+    const strip = scene.add
+      .rectangle(ART_X + ART_WIDTH / 2, ART_Y + ART_HEIGHT - 26, ART_WIDTH, 52, 0x0f1409, 0.62)
+      .setOrigin(0.5);
+    this.hintText = scene.add
+      .text(ART_X + ART_WIDTH / 2, ART_Y + ART_HEIGHT - 26, '', {
         fontFamily: UI_FONT,
         fontSize: '21px',
         color: PALETTE.hudText,
-        stroke: '#141008',
-        strokeThickness: 5,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5);
 
     this.root = scene.add
-      .container(0, 0, [this.strip, this.turnText, this.scoreText, this.hintText, this.clockText, this.lapText])
+      .container(0, 0, [
+        this.clockText,
+        this.turnText,
+        this.lapTitle,
+        ...this.lapTexts,
+        this.scoreText,
+        strip,
+        this.hintText,
+      ])
       .setDepth(DEPTHS.hud);
 
-    const barY = LOGICAL_HEIGHT - 116;
-    this.barBack = scene.add.rectangle(0, 0, Hud.BAR_WIDTH, Hud.BAR_HEIGHT, 0x10170d, 0.9).setStrokeStyle(2, 0x6f6244);
-    this.barBand = scene.add.rectangle(0, 0, 10, Hud.BAR_HEIGHT - 6, 0x4fa83f, 0.9);
-    this.barNeedle = scene.add.rectangle(0, 0, 4, Hud.BAR_HEIGHT + 12, 0xf3ead2, 1);
+    const barTop = Hud.BAR_BOTTOM - Hud.BAR_HEIGHT;
+    const barBack = scene.add
+      .rectangle(0, 0, Hud.BAR_WIDTH, Hud.BAR_HEIGHT, 0x10170d, 0.92)
+      .setStrokeStyle(3, 0x6f6244);
+    this.barBand = scene.add.rectangle(0, 0, Hud.BAR_WIDTH - 8, 10, 0x4fa83f, 0.95);
+    this.barNeedle = scene.add.rectangle(0, 0, Hud.BAR_WIDTH + 20, 5, 0xf3ead2, 1);
     this.barLabel = scene.add
-      .text(0, -Hud.BAR_HEIGHT - 14, '', {
+      .text(0, -Hud.BAR_HEIGHT / 2 - 14, '', {
         fontFamily: UI_FONT,
         fontSize: '18px',
         color: PALETTE.hudText,
-        stroke: '#10170d',
-        strokeThickness: 5,
+        align: 'center',
+        wordWrap: { width: MARGIN_WIDTH - 8 },
       })
       .setOrigin(0.5, 1);
     this.barRoot = scene.add
-      .container(LOGICAL_WIDTH / 2, barY, [this.barBack, this.barBand, this.barNeedle, this.barLabel])
+      .container(Hud.RIGHT_COLUMN, barTop + Hud.BAR_HEIGHT / 2, [barBack, this.barBand, this.barNeedle, this.barLabel])
       .setDepth(DEPTHS.hud)
       .setVisible(false);
   }
@@ -117,28 +160,33 @@ export class Hud {
   }
 
   /**
-   * Which of the seven marks have been shot in the current lap. Every mark has
-   * to be shot before any can be repeated.
+   * Which of the seven marks are done. In a match every mark has to be shot
+   * before any can be repeated, so this is what is still owed.
    */
   setLapMarks(done: ReadonlySet<SpotId>, caption: string): void {
-    const label = SHOT_SPOTS.map((s) => (done.has(s.id) ? `[${s.points}]` : ` ${s.points} `)).join('');
-    this.lapText.setText(`${caption}  ${label}`);
+    this.lapTitle.setText(caption);
+    SHOT_SPOTS.forEach((spot, index) => {
+      const text = this.lapTexts[index];
+      if (text === undefined) return;
+      const struck = done.has(spot.id);
+      text.setColor(struck ? '#6f7c60' : PALETTE.hudText);
+      text.setAlpha(struck ? 0.5 : 1);
+    });
   }
 
   /** Shows the charge bar with the scoring band the physics actually allows. */
   showBar(windowLow: number, windowHigh: number, label: string): void {
-    const width = Hud.BAR_WIDTH;
-    const left = -width / 2;
-    const bandWidth = Math.max(6, (windowHigh - windowLow) * width);
-    const bandCentre = left + ((windowLow + windowHigh) / 2) * width;
-    this.barBand.setSize(bandWidth, Hud.BAR_HEIGHT - 6).setPosition(bandCentre, 0);
+    const height = Hud.BAR_HEIGHT;
+    const bandHeight = Math.max(8, (windowHigh - windowLow) * height);
+    // The bar fills upwards, so a higher charge sits higher on the bar.
+    const bandCentre = height / 2 - ((windowLow + windowHigh) / 2) * height;
+    this.barBand.setSize(Hud.BAR_WIDTH - 8, bandHeight).setPosition(0, bandCentre);
     this.barLabel.setText(label);
     this.barRoot.setVisible(true);
   }
 
   setCharge(charge: number): void {
-    const width = Hud.BAR_WIDTH;
-    this.barNeedle.setPosition(-width / 2 + Math.min(1, Math.max(0, charge)) * width, 0);
+    this.barNeedle.setPosition(0, Hud.BAR_HEIGHT / 2 - Math.min(1, Math.max(0, charge)) * Hud.BAR_HEIGHT);
   }
 
   hideBar(): void {
