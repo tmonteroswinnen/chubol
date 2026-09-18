@@ -1,0 +1,122 @@
+# Reglas de CHUBOL
+
+Este documento separa tres cosas: lo que confirmaste, lo que interpreté porque hacía
+falta para que el juego funcione, y lo que todavía falta definir. El código sigue
+esta separación: nada de lo interpretado está escrito como si fuera histórico.
+
+---
+
+## 1. Confirmado por vos
+
+| Regla | Dónde vive en el código |
+|---|---|
+| Se juega **de a dos: pareja contra pareja**. | `src/game/domain/match.ts` (`TeamConfig`, dos equipos de dos) |
+| Cada pareja tiene **1 minuto** para sumar lo más que pueda. | `RULES_DEFAULTS.turnSeconds = 60` en `src/game/config/gameplay.ts` |
+| **Hay que tirar de todos los lugares**: no puede quedar una marca sin tirar. | `Match.canShootFrom()` — bloquea repetir una marca hasta completar la vuelta |
+| Después va la otra pareja, con su minuto. | `Match.endTurn()` / `Match.startTurn()` |
+| **Gana la pareja que hizo más puntos.** | `Match.result()` |
+| Un solo aro. | `HOOP` en `src/game/config/court.ts` |
+| **No se pueden hacer tapones.** | No existe ninguna mecánica de bloqueo. Los otros personajes esperan fuera de la zona de tiro y nunca marcan. |
+| Embocar desde distintos lugares vale distinto: 2, 3, 4, 5, 6, 7 y 8. | `SHOT_SPOTS` en `src/game/config/court.ts` |
+| **Son lugares concretos**, no zonas. | `spotAt()` en `src/game/domain/spots.ts` devuelve `null` fuera de las marcas |
+| **Cuanto más alto el número, más difícil.** | `designedBandWidth(points)` en `src/game/sim/ball.ts` |
+| **No hay regla de rebote**: hay que ir a buscar la pelota rápido para no perder tiempo. | Fase `retrieving` en `src/game/scenes/GameScene.ts`. El reloj sigue corriendo mientras vas a buscarla. |
+| La licuadora y las frutas son el trofeo. | `PROPS.trophyTable`, celebración en `ResultScene` |
+
+### Dificultad por número
+
+El aro deja un margen físico de aproximadamente ±1 % de la velocidad de lanzamiento
+en la marca de 2, y ±0,4 % en la de 8. Eso es imposible de acertar con una barra de
+tiempo. Entonces la barra no es una escala fija de velocidad: para cada intento se
+estira el mapeo carga → velocidad de forma que **el intervalo real de acierto caiga
+exactamente sobre la franja verde dibujada**.
+
+Resultado: si soltás dentro de la franja, entra. Siempre. Y la franja se angosta con
+el número de la marca, que es lo que pediste:
+
+| Marca | Ancho de la franja | Tiempo real para soltar |
+|---|---|---|
+| 2 | 17,0 % de la barra | 161 ms |
+| 3 | 15,3 % | 145 ms |
+| 4 | 13,5 % | 128 ms |
+| 5 | 11,7 % | 112 ms |
+| 6 | 10,0 % | 95 ms |
+| 7 | 8,3 % | 78 ms |
+| 8 | 6,5 % | 62 ms |
+
+Notá que la 3 y la 4 están a la misma distancia del aro, y la 6 y la 7 también.
+La dificultad está atada al **número**, no a la distancia, justamente porque eso
+fue lo que pediste.
+
+---
+
+## 2. Interpretado (no lo dijiste, pero hacía falta para poder jugar)
+
+Está marcado así en el código y es configuración, no una afirmación.
+
+1. **Cómo se alternan los dos de la pareja.** Dentro del minuto, los dos integrantes
+   se van turnando la pelota: uno tira, después el otro. Si en realidad tiraba
+   siempre el mismo, o se elegía libremente, se cambia en `Match.resolveShot()`.
+
+2. **Qué pasa si completás la vuelta de las 7 marcas antes de que termine el minuto.**
+   Se habilitan las 7 de nuevo y arranca otra vuelta. Así "no puede quedar un lugar
+   por tirar" se cumple y el minuto sigue teniendo sentido. Si en realidad la vuelta
+   era una sola y se terminaba ahí, es un cambio de una línea.
+
+3. **Un tiro que salió antes del bocinazo cuenta.** Si soltás la pelota con el reloj
+   todavía corriendo, el intento se resuelve aunque el minuto termine en el aire.
+
+4. **Radio de recogida de la pelota:** 0,75 m (`PICKUP_RADIUS` en `GameScene.ts`).
+   Si la pelota queda fuera de la cancha, se trae al borde jugable: representa ir a
+   buscarla, sin hacerte caminar fuera de escena.
+
+---
+
+## 3. Todavía falta que lo definas
+
+**¿Qué pasa si las dos parejas empatan?** Dijiste que no sabés qué harían.
+
+Mientras tanto, y marcado como provisional en la pantalla de reglas y en el
+resultado:
+
+- Ronda extra de 30 segundos para cada pareja (`RULES_DEFAULTS.tiebreakSeconds`).
+- Si vuelven a empatar, se repite.
+- Después de 3 rondas extra iguales, el partido termina **compartido** y la pantalla
+  dice que falta definir el desempate de verdad. Esto existe para que el juego no
+  quede en un bucle sin salida, no porque sea una regla.
+
+Se cambia entero desde `RULES_DEFAULTS` en `src/game/config/gameplay.ts`:
+`tiebreak: 'extraTurn' | 'shared'`, `tiebreakSeconds`, `maxTiebreakRounds`.
+
+---
+
+## Modo práctica
+
+No es una regla de CHUBOL: es una herramienta para probar que la cancha, la física y
+los siete valores funcionan.
+
+- Un solo jugador, sin reloj, sin condición de victoria inventada.
+- Podés tirar de cualquier marca, las veces que quieras.
+- Lleva la cuenta de cuántas marcas diferentes embocaste (0/7 a 7/7).
+- Una de cada marca suma **35**, que es la suma de 2+3+4+5+6+7+8.
+
+---
+
+## Ubicación de las siete marcas
+
+Interpretadas de la descripción del croquis. El croquis original
+(`references/chubol-croquis.jpg`) **no está en el repositorio**, así que estas
+posiciones son una lectura de tu descripción y hay que recalibrarlas cuando aparezca.
+
+| Puntos | Posición en el mundo (m) | Descripción |
+|---|---|---|
+| 2 | (2.2, 0.0) | Dentro de la llave, cerca del aro |
+| 3 | (1.9, 3.1) | Cerca del aro, hacia los cipreses |
+| 4 | (1.9, −3.1) | Cerca del aro, hacia la pared del frente |
+| 5 | (5.0, 0.0) | Extremo redondeado de la llave (tiro libre) |
+| 6 | (5.2, −4.68) | Extremo del arco exterior, lado pared del frente |
+| 7 | (5.2, 4.68) | Extremo del arco exterior, lado cipreses |
+| 8 | (10.0, 0.0) | Fuera del arco exterior, hacia la derecha |
+
+No hay marca de 1: las medidas del croquis no son valores de tiro. Fuera de estas
+siete posiciones no se puede tirar y no hay puntaje interpolado por distancia.
