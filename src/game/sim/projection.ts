@@ -155,6 +155,24 @@ export class CourtProjection {
   }
 
   /**
+   * Inverse projection onto the horizontal plane at a given height.
+   * Returns null when the ray never reaches that plane.
+   */
+  planeFromScreen(screenX: number, screenY: number, height: number): Vec2 | null {
+    const a = (screenX - this.principalX) / this.focal;
+    const b = (this.principalY - screenY) / this.focal;
+    const dir: Vec3 = {
+      x: this.basis.right.x * a + this.basis.up.x * b + this.basis.forward.x,
+      y: this.basis.right.y * a + this.basis.up.y * b + this.basis.forward.y,
+      z: this.basis.right.z * a + this.basis.up.z * b + this.basis.forward.z,
+    };
+    if (Math.abs(dir.z) < 1e-9) return null;
+    const t = (height - this.camera.position.z) / dir.z;
+    if (t <= 0) return null;
+    return { x: this.camera.position.x + dir.x * t, y: this.camera.position.y + dir.y * t };
+  }
+
+  /**
    * Inverse projection restricted to the ground plane (z = 0).
    * Returns null when the screen point is at or above the horizon.
    */

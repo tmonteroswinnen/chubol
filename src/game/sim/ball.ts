@@ -42,18 +42,43 @@ export type PhysicsOverrides = Partial<{
 
 /** Horizontal distance from a release point to the rim centre. */
 export function distanceToRim(fromX: number, fromY: number): number {
-  return Math.hypot(SHOT.aimTargetX - fromX, SHOT.aimTargetY - fromY);
+  return Math.hypot(HOOP.groundX - fromX, HOOP.groundY - fromY);
 }
 
 /**
- * Speed that drops the ball through the rim centre from `fromX, fromY` at the
- * configured launch angle. Returns null when the geometry has no solution.
+ * Height the ball leaves the hand at. Normally a standing release; from under
+ * the basket the shooter reaches above the ring and lays it in, because no arc
+ * can score from there.
+ */
+export function releaseHeight(fromX: number, fromY: number): number {
+  const d = distanceToRim(fromX, fromY);
+  const t = Math.min(Math.max(1 - d / SHOT.layupRange, 0), 1);
+  return SHOT.handHeight + t * (HOOP.rimHeight + SHOT.layupClearance - SHOT.handHeight);
+}
+
+/**
+ * Release angle for a shot from this distance: the one that needs the least
+ * speed to reach the rim. It always has a solution, which a fixed angle does
+ * not — the 2-point mark is barely half a metre from the hoop.
+ */
+export function launchAngle(fromX: number, fromY: number): number {
+  const d = distanceToRim(fromX, fromY);
+  const dh = HOOP.rimHeight - releaseHeight(fromX, fromY);
+  const ideal = Math.PI / 4 + Math.atan2(dh, Math.max(d, 1e-3)) / 2;
+  const min = (SHOT.minimumLaunchAngleDeg * Math.PI) / 180;
+  const max = (SHOT.maximumLaunchAngleDeg * Math.PI) / 180;
+  return Math.min(Math.max(ideal, min), max);
+}
+
+/**
+ * Speed that drops the ball through the rim centre from `fromX, fromY` at that
+ * angle. Returns null when the geometry has no solution.
  */
 export function idealLaunchSpeed(fromX: number, fromY: number): number | null {
   const d = distanceToRim(fromX, fromY);
   if (d < 1e-3) return null;
-  const theta = (SHOT.launchAngleDeg * Math.PI) / 180;
-  const dh = HOOP.rimHeight - SHOT.handHeight;
+  const theta = launchAngle(fromX, fromY);
+  const dh = HOOP.rimHeight - releaseHeight(fromX, fromY);
   const denom = 2 * Math.cos(theta) ** 2 * (d * Math.tan(theta) - dh);
   if (denom <= 0) return null;
   return Math.sqrt((PHYSICS.gravity * d * d) / denom);
@@ -248,15 +273,15 @@ export function launchAtMultiplier(fromX: number, fromY: number, multiplier: num
   const ideal = idealLaunchSpeed(fromX, fromY);
   if (ideal === null) return null;
   const d = distanceToRim(fromX, fromY);
-  const theta = (SHOT.launchAngleDeg * Math.PI) / 180;
+  const theta = launchAngle(fromX, fromY);
   const speed = ideal * multiplier;
   const horizontal = speed * Math.cos(theta);
   return {
     x: fromX,
     y: fromY,
-    z: SHOT.handHeight,
-    vx: ((SHOT.aimTargetX - fromX) / d) * horizontal,
-    vy: ((SHOT.aimTargetY - fromY) / d) * horizontal,
+    z: releaseHeight(fromX, fromY),
+    vx: ((HOOP.groundX - fromX) / d) * horizontal,
+    vy: ((HOOP.groundY - fromY) / d) * horizontal,
     vz: speed * Math.sin(theta),
   };
 }

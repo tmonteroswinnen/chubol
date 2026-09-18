@@ -18,17 +18,31 @@ export const PHYSICS = {
 
 export const SHOT = {
   /** Release height above the player's feet, in metres. */
-  handHeight: 2.05,
-  /** Fixed release angle above the horizontal, in degrees. */
-  launchAngleDeg: 55,
+  handHeight: 1.85,
+  /**
+   * The release angle is not fixed. One of the marks is right under the hoop and
+   * another is seven metres out, and no single angle can reach both: a flat
+   * angle has no solution up close, and a steep one wastes the long shot. Each
+   * attempt uses the minimum-speed angle for its own distance,
+   * 45 deg + atan(rise / run) / 2, which always has a solution.
+   */
+  minimumLaunchAngleDeg: 22,
+  maximumLaunchAngleDeg: 78,
+
+  /**
+   * The 2-point mark is painted almost directly under the hoop — about 0.36 m
+   * from the ring's axis. From there no arc can work: the ball would have to
+   * pass UP through the ring, which is not a basket. What a person actually does
+   * from under the basket is reach up and lay it in, and since this hoop is only
+   * about 2.18 m high they can. So for close shots the release rises above the
+   * ring and the ball drops straight through.
+   */
+  layupRange: 1.1,
+  layupClearance: 0.45,
   /** Charge bar sweeps 0 -> 1 -> 0 on this half-period, in milliseconds. */
   chargeHalfPeriodMs: 950,
   /** Charge value that releases exactly the ideal speed. */
   sweetSpot: 0.72,
-  /** Aim is assisted onto the rim centre in this first version. */
-  aimTargetX: 0.0,
-  aimTargetY: 0.0,
-
   /**
    * How wide the scoring band is drawn on the charge bar, as a fraction of the
    * bar, for the 2-point mark and for the 8-point mark.

@@ -6,6 +6,7 @@ import {
   createShotProfile,
   launchAtMultiplier,
   launchFromProfile,
+  releaseHeight,
   simulateToOutcome,
   type BallState,
 } from '../src/game/sim/ball';
@@ -43,20 +44,45 @@ describe('ball flight and scoring', () => {
   });
 
   it('misses as soon as the release falls outside the band', () => {
-    for (const spot of SHOT_SPOTS) {
+    // The 2-point mark is excluded on purpose: it is painted under the hoop and
+    // is played as a lay-up, which is forgiving by nature. See the next test.
+    for (const spot of SHOT_SPOTS.filter((s) => s.points > 2)) {
       const profile = createShotProfile(spot.x, spot.y, spot.points)!;
       const at = (c: number) => simulateToOutcome(launchFromProfile(profile, c)!);
-      expect(at(profile.window.low - 0.004), `spot ${spot.points} under`).toBe('missed');
-      expect(at(profile.window.high + 0.004), `spot ${spot.points} over`).toBe('missed');
+      expect(at(profile.window.low - 0.008), `spot ${spot.points} under`).toBe('missed');
+      expect(at(profile.window.high + 0.008), `spot ${spot.points} over`).toBe('missed');
     }
   });
 
-  it('still lets a heavily overpowered shot bank in off the board, as a real one would', () => {
+  it('still lets a badly overpowered shot bank in off the board, as a real one would', () => {
     // Not an accident of the scoring code: the ball hits the wooden board and
-    // drops through. It is a separate island of makes, well outside the band.
-    const profile = createShotProfile(2.2, 0, 2)!;
-    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.004)!)).toBe('missed');
-    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.02)!)).toBe('made');
+    // drops through. It is a separate island of makes, well outside the band, so
+    // it can never be reached by aiming at the green strip.
+    const four = SHOT_SPOTS.find((s) => s.points === 4)!;
+    const profile = createShotProfile(four.x, four.y, four.points)!;
+    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.008)!)).toBe('missed');
+    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.05)!)).toBe('made');
+  });
+
+  it('plays the mark under the hoop as a forgiving lay-up', () => {
+    // The artwork paints the 2 about 0.36 m from the ring's axis. No arc can
+    // score from there — the ball would pass up through the ring — so the
+    // shooter reaches above the rim and drops it in, and a wide range of
+    // releases works. It is the easiest shot and it is worth the least.
+    const two = SHOT_SPOTS.find((s) => s.points === 2)!;
+    expect(Math.hypot(two.x - HOOP.groundX, two.y - HOOP.groundY)).toBeLessThan(0.6);
+    expect(releaseHeight(two.x, two.y)).toBeGreaterThan(HOOP.rimHeight);
+
+    const profile = createShotProfile(two.x, two.y, two.points)!;
+    for (const charge of [0.5, 0.6, 0.72, 0.85, 0.95]) {
+      expect(simulateToOutcome(launchFromProfile(profile, charge)!), `charge ${charge}`).toBe('made');
+    }
+  });
+
+  it('releases from shoulder height for every mark that is not a lay-up', () => {
+    for (const spot of SHOT_SPOTS.filter((s) => s.points > 2)) {
+      expect(releaseHeight(spot.x, spot.y), `spot ${spot.points}`).toBeLessThan(HOOP.rimHeight);
+    }
   });
 
   it('makes the long marks demand more precision than the short ones', () => {
@@ -83,7 +109,7 @@ describe('ball flight and scoring', () => {
   });
 
   it('survives a stalled frame without tunnelling through the rim', () => {
-    const sim = new ShotSimulation(1, perfectShotFrom(5, 0, 5));
+    const sim = new ShotSimulation(1, perfectShotFrom(3.59, -0.01, 5));
     // One huge delta, as after a tab switch, then normal frames.
     sim.advance(2.5);
     let guard = 0;
@@ -95,7 +121,7 @@ describe('ball flight and scoring', () => {
   });
 
   it('does not resolve twice', () => {
-    const sim = new ShotSimulation(7, perfectShotFrom(5, 0, 5));
+    const sim = new ShotSimulation(7, perfectShotFrom(3.59, -0.01, 5));
     const resolutions: string[] = [];
     let guard = 0;
     while (guard < 10000) {
@@ -133,14 +159,14 @@ describe('ball flight and scoring', () => {
   });
 
   it('misses when the release is badly under- or over-powered', () => {
-    expect(simulateToOutcome(launchAtMultiplier(5, 0, 0.85)!)).toBe('missed');
-    expect(simulateToOutcome(launchAtMultiplier(5, 0, 1.35)!)).toBe('missed');
+    expect(simulateToOutcome(launchAtMultiplier(5.19, 2.96, 0.8)!)).toBe('missed');
+    expect(simulateToOutcome(launchAtMultiplier(5.19, 2.96, 1.3)!)).toBe('missed');
   });
 
   it('never lets a ball that hits the backboard pass through it', () => {
     // A flat, fast shot arrives at board height and must bounce off its face.
     const flat: BallState = {
-      x: 1.0,
+      x: 3.0,
       y: 0,
       z: (HOOP.boardBottomZ + HOOP.boardTopZ) / 2,
       vx: -14,
@@ -162,7 +188,7 @@ describe('ball flight and scoring', () => {
 
   it('resolves instead of letting the ball sail out of the scene', () => {
     // Sails over the board and away; the attempt must still close.
-    const sim = new ShotSimulation(1, launchAtMultiplier(5, 0, 1.18)!);
+    const sim = new ShotSimulation(1, launchAtMultiplier(5.19, 2.96, 1.35)!);
     let guard = 0;
     while (sim.resolved === null && guard < 20000) {
       sim.advance(1 / 240);
@@ -173,7 +199,7 @@ describe('ball flight and scoring', () => {
   });
 
   it('never sinks the ball below the grass', () => {
-    const sim = new ShotSimulation(1, launchAtMultiplier(8, 2, 1.25)!);
+    const sim = new ShotSimulation(1, launchAtMultiplier(6, -2, 1.25)!);
     let minZ = Infinity;
     let guard = 0;
     while (sim.resolved === null && guard < 10000) {
@@ -186,7 +212,7 @@ describe('ball flight and scoring', () => {
 
   it('always reaches a resolution', () => {
     for (const multiplier of [0.5, 0.9, 1, 1.1, 1.6, 2.2]) {
-      const launch = launchAtMultiplier(6, -2, multiplier)!;
+      const launch = launchAtMultiplier(5.19, 2.96, multiplier)!;
       const sim = new ShotSimulation(1, launch);
       let guard = 0;
       while (sim.resolved === null && guard < 20000) {

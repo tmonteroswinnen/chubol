@@ -5,8 +5,7 @@ import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
 import { PALETTE } from '../render/palette';
 import { body, heading, makeButton, panel, UI_FONT, type Button } from '../render/ui';
-import { sharedTextures } from './BootScene';
-import { REFERENCE_POSES } from './referencePose';
+import { REFERENCE_BALL, REFERENCE_POSES } from './referencePose';
 
 const REFERENCE_PATH = 'references/chubol-nba-jam.png';
 
@@ -38,7 +37,7 @@ export class CompareScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.view = new CourtView(this, courtProjection(), sharedTextures());
+    this.view = new CourtView(this, courtProjection());
     this.view.setMarkersVisible(false);
     this.applyReferenceFrame();
     this.buildChrome();
@@ -65,8 +64,7 @@ export class CompareScene extends Phaser.Scene {
         visible: true,
       });
     });
-    const carrier = REFERENCE_POSES[2]!;
-    this.view.setBall(carrier.x - 0.35, carrier.y - 0.1, 1.1);
+    this.view.setBall(REFERENCE_BALL.x, REFERENCE_BALL.y, REFERENCE_BALL.z);
     this.view.update(0);
   }
 
@@ -144,7 +142,6 @@ export class CompareScene extends Phaser.Scene {
       (object as unknown as { setVisible: (v: boolean) => void }).setVisible(!clean);
     }
     this.referenceImage?.setVisible(!clean);
-    this.view.setLogoVisible(true);
   }
 
   override update(): void {

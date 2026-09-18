@@ -1,14 +1,12 @@
 /**
  * Asset manifest.
  *
- * Every entry names a file the finished game expects, what it is for, its size,
- * its pivot and where it comes from. Nothing here has been produced yet: this
- * session has no image generation or image editing tool, and the three reference
- * images are not in the checkout either, so every entry is `missing` and the game
- * runs on the procedural development art instead.
+ * Every entry names a file, what it is for, its size, its pivot and where it
+ * comes from.
  *
- * The loader probes each path before asking Phaser to load it, so a missing file
- * is a known state rather than a failed request in the console.
+ * The court plate was supplied and is what the game draws. What is still missing
+ * is the four adults and the game ball as separate sprites; until those exist the
+ * game draws procedural stand-ins and says so on screen.
  */
 
 import { AVAILABLE_FILES } from 'virtual:chubol-assets';
@@ -36,22 +34,26 @@ function entry(
   return { key, path, use, size, pivot, provenance: 'to be produced — see docs/ASSET_REQUESTS.md', status: 'missing' };
 }
 
+/**
+ * What the game still needs. The court plate itself was supplied and is in use;
+ * these are the pieces it does not contain.
+ */
 export const ASSET_MANIFEST: readonly AssetEntry[] = [
-  entry('plate.background', 'assets/backgrounds/court-clean.png', 'Clean court plate: no players, no game ball, no baked shadows', [1536, 1024], 'top-left of frame'),
-  entry('plate.foreground', 'assets/backgrounds/court-foreground.png', 'Front wall and bushes that occlude feet and ball', [1536, 1024], 'top-left of frame'),
-  entry('hoop.back', 'assets/props/hoop-back.png', 'Post, wooden board and far half of the ring', [1536, 1024], 'top-left of frame'),
-  entry('hoop.front', 'assets/props/hoop-front.png', 'Near half of the ring and the chain net', [1536, 1024], 'top-left of frame'),
-  entry('logo', 'assets/ui/chubol-logo.png', 'CHUBOL arcade logo, orange and yellow with dark outline', 'variable', 'centre'),
-  entry('ball', 'assets/props/ball.png', 'Game ball, shaded, with rotation frames', 'variable', 'centre'),
-  entry('character.a', 'assets/characters/friend-a.png', 'Grey tank, purple shorts: idle, walk, hold, wind, release, follow, react', 'variable', 'feet'),
-  entry('character.b', 'assets/characters/friend-b.png', 'White tank with yellow sun, blue shorts', 'variable', 'feet'),
-  entry('character.c', 'assets/characters/friend-c.png', 'Red tank, black shorts, red headband', 'variable', 'feet'),
-  entry('character.d', 'assets/characters/friend-d.png', 'Black tank, green shorts, seen from behind in the foreground', 'variable', 'feet'),
-  entry('kid', 'assets/characters/kid-river.png', '13-year-old spectator in a full River Plate kit', 'variable', 'feet'),
-  entry('dog', 'assets/characters/dog.png', 'Short-haired mixed-breed dog, erect ears, long dark muzzle', 'variable', 'feet'),
-  entry('trophy', 'assets/props/trophy-table.png', 'Wooden table with the blender and the fruit', 'variable', 'feet'),
-  entry('audio.chain', 'assets/audio/chain.wav', 'Short metallic chain rattle on a make', 'variable', 'n/a'),
-  entry('audio.board', 'assets/audio/board.wav', 'Wooden board knock', 'variable', 'n/a'),
+  entry('character.a', 'assets/characters/friend-a.png', 'Musculosa gris, shorts violetas — 11 poses', 'variable', 'feet'),
+  entry('character.b', 'assets/characters/friend-b.png', 'Musculosa blanca con sol, shorts azules — 11 poses', 'variable', 'feet'),
+  entry('character.c', 'assets/characters/friend-c.png', 'Musculosa roja, shorts negros, vincha — 11 poses', 'variable', 'feet'),
+  entry('character.d', 'assets/characters/friend-d.png', 'Musculosa negra, shorts verdes — 11 poses', 'variable', 'feet'),
+  entry('character.d.back', 'assets/characters/friend-d-back.png', 'El mismo, de espaldas', 'variable', 'feet'),
+  entry('ball', 'assets/props/ball.png', 'Pelota de juego, con rotación y sombra propia', 'variable', 'centre'),
+  entry('audio.chain', 'assets/audio/chain.wav', 'Cadena metálica corta al embocar', 'variable', 'n/a'),
+  entry('audio.board', 'assets/audio/board.wav', 'Golpe de madera', 'variable', 'n/a'),
+];
+
+/** Artwork that was supplied, or cut from it, and is what the game draws. */
+export const SUPPLIED_ART: readonly AssetEntry[] = [
+  { key: 'plate', path: 'assets/backgrounds/chubol-court-clean-v1.png', use: 'La cancha entera salvo los cuatro adultos y la pelota de juego', size: [1536, 1024], pivot: 'top-left of frame', provenance: 'entregada por el autor', status: 'missing' },
+  { key: 'plate.foreground', path: 'assets/backgrounds/court-foreground.png', use: 'Pared del frente y arbustos, recortados de la lámina para tapar los pies', size: [1536, 1024], pivot: 'top-left of frame', provenance: 'recortada de la lámina por scripts/cutLayers.mjs', status: 'missing' },
+  { key: 'hoop.front', path: 'assets/props/hoop-front.png', use: 'Mitad cercana del aro y la red de cadenas, recortadas de la lámina', size: [1536, 1024], pivot: 'top-left of frame', provenance: 'recortada de la lámina por scripts/cutLayers.mjs', status: 'missing' },
 ];
 
 /**
@@ -75,7 +77,7 @@ export const REFERENCE_FILES: readonly AssetEntry[] = [
  */
 export function resolveAssets(): readonly AssetEntry[] {
   const available = new Set(AVAILABLE_FILES);
-  const all = [...ASSET_MANIFEST, ...REFERENCE_FILES];
+  const all = [...ASSET_MANIFEST, ...REFERENCE_FILES, ...SUPPLIED_ART];
   for (const asset of all) asset.status = available.has(asset.path) ? 'available' : 'missing';
   return all;
 }

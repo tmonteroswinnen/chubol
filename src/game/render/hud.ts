@@ -44,26 +44,26 @@ export class Hud {
       .text(LOGICAL_WIDTH / 2, stripY, '', { fontFamily: UI_FONT, fontSize: '19px', color: PALETTE.hudText })
       .setOrigin(0.5);
 
-    // Clock and lap tracker sit in a small panel at the top, clear of the hoop,
-    // the dog and the trophy.
+    // Clock and lap tracker sit at the top left, over the trees: the CHUBOL logo
+    // is painted into the artwork at the top centre and must not be covered.
     this.clockText = scene.add
-      .text(LOGICAL_WIDTH / 2, 34, '', {
+      .text(28, 44, '', {
         fontFamily: UI_FONT,
-        fontSize: '34px',
+        fontSize: '42px',
         color: PALETTE.hudAccent,
-        stroke: '#1a1208',
-        strokeThickness: 6,
+        stroke: '#141008',
+        strokeThickness: 7,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0, 0.5);
     this.lapText = scene.add
-      .text(LOGICAL_WIDTH / 2, 70, '', {
+      .text(28, 90, '', {
         fontFamily: UI_FONT,
-        fontSize: '19px',
+        fontSize: '21px',
         color: PALETTE.hudText,
-        stroke: '#1a1208',
-        strokeThickness: 4,
+        stroke: '#141008',
+        strokeThickness: 5,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0, 0.5);
 
     this.root = scene.add
       .container(0, 0, [this.strip, this.turnText, this.scoreText, this.hintText, this.clockText, this.lapText])

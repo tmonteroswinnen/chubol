@@ -104,19 +104,34 @@ los siete valores funcionan.
 
 ## Ubicación de las siete marcas
 
-Interpretadas de la descripción del croquis. El croquis original
-(`references/chubol-croquis.jpg`) **no está en el repositorio**, así que estas
-posiciones son una lectura de tu descripción y hay que recalibrarlas cuando aparezca.
+**Medidas, no supuestas.** El centro de cada número pintado en la lámina se leyó
+en un recorte a 6× y se proyectó al suelo con la cámara calibrada. Son las marcas
+que vos pintaste.
 
-| Puntos | Posición en el mundo (m) | Descripción |
-|---|---|---|
-| 2 | (2.2, 0.0) | Dentro de la llave, cerca del aro |
-| 3 | (1.9, 3.1) | Cerca del aro, hacia los cipreses |
-| 4 | (1.9, −3.1) | Cerca del aro, hacia la pared del frente |
-| 5 | (5.0, 0.0) | Extremo redondeado de la llave (tiro libre) |
-| 6 | (5.2, −4.68) | Extremo del arco exterior, lado pared del frente |
-| 7 | (5.2, 4.68) | Extremo del arco exterior, lado cipreses |
-| 8 | (10.0, 0.0) | Fuera del arco exterior, hacia la derecha |
+| Puntos | Posición en el mundo (m) | Distancia al aro | Dónde |
+|---|---|---|---|
+| 2 | (0.62, 0.16) | 0.36 m | Debajo del aro, dentro de la llave |
+| 3 | (0.37, 2.66) | 2.72 m | Al costado del aro, hacia los cipreses |
+| 4 | (0.31, −1.99) | 2.09 m | Al costado del aro, hacia la pared del frente |
+| 5 | (3.59, −0.01) | 2.65 m | Extremo redondeado de la llave |
+| 6 | (4.15, −2.31) | 3.96 m | Sobre el arco exterior, lado pared del frente |
+| 7 | (5.19, 2.96) | 5.18 m | Sobre el arco exterior, lado cipreses |
+| 8 | (7.45, −0.49) | 6.53 m | Lejos, por fuera del arco exterior |
 
-No hay marca de 1: las medidas del croquis no son valores de tiro. Fuera de estas
-siete posiciones no se puede tirar y no hay puntaje interpolado por distancia.
+Abrí el croquis original (rotado 90° antihorario) y confirma esta lectura: el **8
+va por fuera del arco, a la derecha** — no en el vértice del arco. También
+confirma que "30cm" y "50cm" son las alturas de las paredes, no valores de tiro, y
+que **no hay ninguna marca de 1**.
+
+Fuera de estas siete posiciones no se puede tirar y no hay puntaje interpolado por
+distancia.
+
+### El 2 es una bandeja
+
+La lámina pinta el 2 a **0,36 m del eje del aro**: prácticamente debajo de la
+canasta. Desde ahí no existe ningún arco que entre — la pelota tendría que pasar
+hacia arriba a través del aro, y eso no es enceste. Lo que hace una persona desde
+abajo del aro es estirarse y meterla, y como este aro está a unos 2,18 m, puede.
+
+Así que para tiros muy cerca el juego sube el punto de suelta por encima del aro y
+la pelota cae derecho. Es el tiro más fácil y vale lo menos, que es como debe ser.

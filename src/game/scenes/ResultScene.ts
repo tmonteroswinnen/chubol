@@ -1,13 +1,11 @@
 import Phaser from 'phaser';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, PROPS } from '../config/court';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH, SCENERY, WAITING_SPOTS } from '../config/court';
 import type { MatchConfig, MatchResult } from '../domain/match';
 import { soundBoard } from '../render/audio';
 import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
 import { PALETTE } from '../render/palette';
 import { body, heading, makeButton, panel, UI_FONT, type Button } from '../render/ui';
-import { sharedTextures } from './BootScene';
-import { WAITING_SPOTS } from './referencePose';
 import type { GameSceneData } from './MenuScene';
 
 export interface ResultSceneData {
@@ -31,20 +29,18 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.view = new CourtView(this, courtProjection(), sharedTextures());
-    this.view.setLogoVisible(false);
+    this.view = new CourtView(this, courtProjection());
     this.view.setMarkersVisible(false);
 
     WAITING_SPOTS.forEach((spot, index) => {
       this.view.setFriend(index, { x: spot.x, y: spot.y, pose: 'cheer', backView: false, visible: true });
     });
     this.view.setBall(0, 0, 0, false);
-    this.view.cheer(true);
 
     // The celebration highlights the blender and the fruit without moving the
     // camera or inventing another scene.
-    this.halo = this.view.flashTrophy();
-    const trophyAt = courtProjection().project(PROPS.trophyTable.x, PROPS.trophyTable.y, 1.5);
+    this.halo = this.flashTrophy();
+    const trophyAt = courtProjection().project(SCENERY.trophyTable.x, SCENERY.trophyTable.y, 1.2);
     this.add
       .text(trophyAt.x, trophyAt.y - 30, 'EL TROFEO', {
         fontFamily: UI_FONT,
@@ -59,6 +55,16 @@ export class ResultScene extends Phaser.Scene {
     this.buildPanel();
     soundBoard.fanfare();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
+  }
+
+  /** A pulse over the blender and the fruit painted into the plate. */
+  private flashTrophy(): Phaser.GameObjects.Ellipse {
+    const at = courtProjection().project(SCENERY.trophyTable.x, SCENERY.trophyTable.y - 0.2, 0.6);
+    const halo = this.add
+      .ellipse(at.x, at.y, at.scale * 1.9, at.scale * 1.5, 0xf5a81c, 0.3)
+      .setDepth(DEPTHS.effects - 1);
+    this.tweens.add({ targets: halo, alpha: 0.05, duration: 640, yoyo: true, repeat: -1 });
+    return halo;
   }
 
   private teardown(): void {

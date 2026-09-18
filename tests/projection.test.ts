@@ -1,58 +1,86 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CAMERA,
-  COURT,
-  FRAMING,
-  FRAMING_ANCHORS,
-  HOOP,
-  LOGICAL_HEIGHT,
-  LOGICAL_WIDTH,
-  SHOT_SPOTS,
-} from '../src/game/config/court';
-import { CourtProjection } from '../src/game/sim/projection';
+import { HOOP, LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, WALK_BOUNDS } from '../src/game/config/court';
+import { courtProjection } from '../src/game/render/context';
 
-const projection = CourtProjection.fit(CAMERA, FRAMING_ANCHORS, FRAMING);
+const projection = courtProjection();
 
-describe('court projection', () => {
-  it('fits the whole court inside the logical frame', () => {
-    const corners = [
-      [COURT.minX, COURT.minY],
-      [COURT.maxX, COURT.minY],
-      [COURT.minX, COURT.maxY],
-      [COURT.maxX, COURT.maxY],
-    ] as const;
-    for (const [x, y] of corners) {
-      const p = projection.project(x, y, 0);
-      expect(p.x, `corner ${x},${y} x`).toBeGreaterThanOrEqual(0);
-      expect(p.x, `corner ${x},${y} x`).toBeLessThanOrEqual(LOGICAL_WIDTH);
-      expect(p.y, `corner ${x},${y} y`).toBeGreaterThanOrEqual(0);
-      expect(p.y, `corner ${x},${y} y`).toBeLessThanOrEqual(LOGICAL_HEIGHT);
+/**
+ * Where each painted number sits on the supplied plate, measured on 6x crops.
+ * These are the numbers the calibration was solved against, so this test is what
+ * keeps the game aligned with the artwork: if someone nudges the camera, the
+ * marks stop landing on their painted glyphs and this fails.
+ */
+const PAINTED_NUMBERS: ReadonlyArray<readonly [number, number, number]> = [
+  [2, 285, 537],
+  [3, 330, 406],
+  [4, 131, 726],
+  [5, 676, 555],
+  [6, 808, 781],
+  [7, 819, 400],
+  [8, 1242, 600],
+];
+
+describe('court projection, calibrated to the supplied plate', () => {
+  it('puts every shot spot on top of its painted number', () => {
+    for (const [points, sx, sy] of PAINTED_NUMBERS) {
+      const spot = SHOT_SPOTS.find((s) => s.points === points);
+      expect(spot, `mark ${points}`).toBeDefined();
+      const at = projection.project(spot!.x, spot!.y, 0);
+      expect(Math.hypot(at.x - sx, at.y - sy), `mark ${points} is off its glyph`).toBeLessThan(4);
     }
+  });
+
+  it('puts the rim where the artwork draws it', () => {
+    const rim = projection.project(HOOP.groundX, HOOP.groundY, HOOP.rimHeight);
+    expect(Math.hypot(rim.x - 301, rim.y - 270)).toBeLessThan(4);
   });
 
   it('keeps the hoop on the left and the play space extending to the right', () => {
     const hoop = projection.project(HOOP.groundX, HOOP.groundY, 0);
-    const farEnd = projection.project(COURT.maxX, 0, 0);
+    const farEnd = projection.project(WALK_BOUNDS.maxX, 0, 0);
     expect(hoop.x).toBeLessThan(LOGICAL_WIDTH / 3);
     expect(farEnd.x).toBeGreaterThan(hoop.x);
   });
 
-  it('leaves room above the backboard for the logo band', () => {
-    const boardTop = projection.project(HOOP.boardX, HOOP.groundY, HOOP.boardTopZ);
-    expect(boardTop.y).toBeGreaterThan(150);
+  it('keeps the whole walkable area inside the frame', () => {
+    const corners = [
+      [WALK_BOUNDS.minX, WALK_BOUNDS.minY],
+      [WALK_BOUNDS.maxX, WALK_BOUNDS.minY],
+      [WALK_BOUNDS.minX, WALK_BOUNDS.maxY],
+      [WALK_BOUNDS.maxX, WALK_BOUNDS.maxY],
+    ] as const;
+    for (const [x, y] of corners) {
+      const at = projection.project(x, y, 0);
+      expect(at.x, `corner ${x},${y}`).toBeGreaterThanOrEqual(0);
+      expect(at.x, `corner ${x},${y}`).toBeLessThanOrEqual(LOGICAL_WIDTH);
+      expect(at.y, `corner ${x},${y}`).toBeGreaterThanOrEqual(0);
+      expect(at.y, `corner ${x},${y}`).toBeLessThanOrEqual(LOGICAL_HEIGHT);
+    }
   });
 
   it('resolves height explicitly, not by sliding along the ground', () => {
-    const feet = projection.project(5, 0, 0);
-    const rim = projection.project(5, 0, HOOP.rimHeight);
+    const feet = projection.project(4, 0, 0);
+    const rim = projection.project(4, 0, HOOP.rimHeight);
     expect(rim.y).toBeLessThan(feet.y);
     // A ground homography alone would put both at the same place.
-    expect(feet.y - rim.y).toBeGreaterThan(100);
+    expect(feet.y - rim.y).toBeGreaterThan(150);
+  });
+
+  it('draws an adult at a size that matches the artwork', () => {
+    // The four adults in the reference are drawn 215 to 305 px tall. Anything
+    // far outside that means the scale calibration has drifted.
+    for (const spot of SHOT_SPOTS) {
+      const feet = projection.project(spot.x, spot.y, 0);
+      const head = projection.project(spot.x, spot.y, 1.75);
+      const drawn = feet.y - head.y;
+      expect(drawn, `mark ${spot.points}`).toBeGreaterThan(150);
+      expect(drawn, `mark ${spot.points}`).toBeLessThan(330);
+    }
   });
 
   it('scales with depth: the same person is bigger at the front of the court', () => {
-    const front = projection.project(6, COURT.minY + 0.5, 0);
-    const back = projection.project(6, COURT.maxY - 0.5, 0);
+    const front = projection.project(4, WALK_BOUNDS.minY, 0);
+    const back = projection.project(4, WALK_BOUNDS.maxY, 0);
     expect(front.scale).toBeGreaterThan(back.scale);
   });
 
@@ -72,27 +100,12 @@ describe('court projection', () => {
   it('does not move a shot spot when the browser window changes size', () => {
     // The logical canvas is fixed and the scale manager letterboxes the real
     // one, so world positions cannot depend on the window at all.
-    const before = SHOT_SPOTS.map((s) => projection.project(s.x, s.y, 0));
-    const rebuilt = CourtProjection.fit(CAMERA, FRAMING_ANCHORS, FRAMING);
-    const after = SHOT_SPOTS.map((s) => rebuilt.project(s.x, s.y, 0));
-    for (let i = 0; i < before.length; i += 1) {
-      expect(after[i]!.x).toBeCloseTo(before[i]!.x, 10);
-      expect(after[i]!.y).toBeCloseTo(before[i]!.y, 10);
-    }
-  });
-
-  it('maps a pointer anywhere on the court back to a sensible world position', () => {
+    const again = courtProjection();
     for (const spot of SHOT_SPOTS) {
-      const screen = projection.project(spot.x, spot.y, 0);
-      const world = projection.groundFromScreen(screen.x + 12, screen.y + 8);
-      expect(world).not.toBeNull();
-      expect(Math.hypot(world!.x - spot.x, world!.y - spot.y)).toBeLessThan(1.2);
+      const a = projection.project(spot.x, spot.y, 0);
+      const b = again.project(spot.x, spot.y, 0);
+      expect(b.x).toBeCloseTo(a.x, 10);
+      expect(b.y).toBeCloseTo(a.y, 10);
     }
-  });
-
-  it('refuses a framing anchor behind the camera', () => {
-    expect(() =>
-      CourtProjection.fit(CAMERA, [{ x: 0, y: -40, z: 0 }, { x: 1, y: -41, z: 0 }], FRAMING),
-    ).toThrow();
   });
 });

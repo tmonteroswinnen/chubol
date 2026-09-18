@@ -8,8 +8,7 @@ import { CourtView, DEPTHS } from '../render/courtView';
 import { soundBoard } from '../render/audio';
 import { PALETTE } from '../render/palette';
 import { body, developmentArtBadge, heading, makeButton, panel, UI_FONT, type Button } from '../render/ui';
-import { sharedTextures } from './BootScene';
-import { REFERENCE_POSES } from './referencePose';
+import { REFERENCE_BALL, REFERENCE_POSES } from './referencePose';
 
 export type GameMode = 'practice' | 'challenge';
 
@@ -33,12 +32,12 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.view = new CourtView(this, courtProjection(), sharedTextures());
+    this.view = new CourtView(this, courtProjection());
     this.view.setMarkersVisible(false);
     REFERENCE_POSES.forEach((pose, index) => {
       this.view.setFriend(index, { x: pose.x, y: pose.y, pose: 'idle0', backView: pose.backView, visible: true });
     });
-    this.view.setBall(REFERENCE_POSES[2]!.x - 0.35, REFERENCE_POSES[2]!.y - 0.1, 1.1);
+    this.view.setBall(REFERENCE_BALL.x, REFERENCE_BALL.y, REFERENCE_BALL.z);
 
     this.buildMenu();
 

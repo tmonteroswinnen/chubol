@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BALL, LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, WALK_BOUNDS, type ShotSpot } from '../config/court';
+import { BALL, LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS, WALK_BOUNDS, WAITING_SPOTS, type ShotSpot } from '../config/court';
 import { MOVEMENT, SHOT } from '../config/gameplay';
 import { Match, defaultMatchConfig, type TeamConfig } from '../domain/match';
 import { PracticeSession } from '../domain/practice';
@@ -12,8 +12,6 @@ import { Hud } from '../render/hud';
 import { CHARACTER_KEYS } from '../render/textures';
 import { developmentArtBadge, heading, makeButton, panel, type Button } from '../render/ui';
 import { usingDevelopmentArt } from '../assets/manifest';
-import { sharedTextures } from './BootScene';
-import { WAITING_SPOTS } from './referencePose';
 import type { GameSceneData } from './MenuScene';
 
 /**
@@ -80,8 +78,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.view = new CourtView(this, courtProjection(), sharedTextures());
-    this.view.setLogoVisible(false);
+    this.view = new CourtView(this, courtProjection());
     this.hud = new Hud(this);
 
     if (this.sceneData.mode === 'challenge') {
@@ -259,8 +256,7 @@ export class GameScene extends Phaser.Scene {
       soundBoard.score(this.lockedPoints);
       this.view.popScore(this.shooter.x, this.shooter.y, `+${this.lockedPoints}`, true);
       this.view.setFriend(this.friendIndex, { pose: 'cheer' });
-      this.view.cheer(true);
-    } else {
+      } else {
       soundBoard.miss();
       this.view.popScore(this.shooter.x, this.shooter.y, 'AFUERA', false);
       this.view.setFriend(this.friendIndex, { pose: 'follow' });
@@ -283,7 +279,6 @@ export class GameScene extends Phaser.Scene {
     const match = this.match;
     if (match === null) return;
     match.endTurn();
-    this.view.cheer(false);
 
     if (match.finished) {
       this.phase = 'over';
@@ -405,8 +400,7 @@ export class GameScene extends Phaser.Scene {
         if (this.breakFor <= 0) {
           this.match?.startTurn();
           this.hud.setHint('');
-          this.view.cheer(false);
-          this.beginShotCycle(true);
+                this.beginShotCycle(true);
         }
         break;
       default:
@@ -466,7 +460,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.view.cheer(false);
     this.movePlayer(delta);
     const pose = this.walking ? CourtView.walkFrame(this.timer) : 'idle0';
     this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose });

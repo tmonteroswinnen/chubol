@@ -4,8 +4,10 @@
 
 El repositorio estaba prácticamente vacío: sólo `README.md` (un commit inicial) y
 el `.md` con el enunciado, sin commitear. No había `package.json`, ni lockfile, ni
-carpeta `references/`, ni ningún recurso gráfico. No había `CLAUDE.md` ni
-`AGENTS.md` propios del repo.
+carpeta `references/`, ni ningún recurso gráfico.
+
+Después llegaron las tres referencias y una lámina limpia de la cancha, y el
+juego se recalibró contra ellas. Ver `docs/VISUAL_SPEC.md`.
 
 Herramientas realmente disponibles, verificadas: Node 20.19.5, pnpm 9.15.9, Git,
 Chrome y Edge instalados. **No hay** generación de imágenes, edición generativa,
@@ -38,8 +40,26 @@ con una ilustración pixel art y convertiría esta primera versión en un proyec
 mucho mayor, sin poder demostrar el mismo acabado. No hay una base 3D existente
 que lo justifique.
 
-**Por qué no un simple plano 2D:** la pelota tiene altura y el aro está a 3 metros.
-Una homografía del suelo sola no define esa dimensión.
+**Por qué no un simple plano 2D:** la pelota tiene altura y el aro está a más de
+dos metros. Una homografía del suelo sola no define esa dimensión.
+
+### Calibración contra el arte
+
+La cámara **no se elige, se mide**. El proceso, reproducible:
+
+| Script | Qué hace |
+|---|---|
+| `scripts/png.mjs` | Lee y escribe PNG con `zlib` de Node, sin dependencias |
+| `scripts/crop.mjs` | Recorta y amplía zonas de la lámina con una grilla, para medir a mano |
+| `scripts/landmarks.mjs` | Encuentra la pintura de la cancha por color y componentes conexas |
+| `scripts/fitCamera.mjs` | Resuelve los 17 parámetros de cámara y geometría por Nelder-Mead |
+| `scripts/cutLayers.mjs` | Recorta de la lámina el primer plano y el frente del aro |
+| `scripts/worldPoints.mjs` | Proyecta puntos de pantalla al mundo, para ubicar el resto |
+
+`fitCamera.mjs` llega a **5,5 px RMS sobre el plano del suelo**. Los valores que
+imprime se pegan en `src/game/config/court.ts`. Hay una prueba
+(`tests/projection.test.ts`) que falla si la cámara se desalinea de los números
+pintados.
 
 ### La proyección
 
@@ -56,36 +76,45 @@ Ejes del mundo, en metros:
 +z  hacia arriba
 ```
 
-La distancia focal y el punto principal **no se fijan a mano**: se resuelven una
-vez para que la cancha entre en un rectángulo del lienzo lógico
-(`CourtProjection.fit`). El lienzo lógico es fijo (1536 × 1024) y el escalador de
-Phaser pone márgenes, así que **agrandar la ventana no puede mover una marca de
-tiro ni cambiar un resultado**. Hay una prueba que lo verifica.
+La distancia focal y el punto principal **no se fijan a mano ni se derivan de un
+encuadre**: salen del ajuste contra la lámina (`CALIBRATION` en
+`src/game/config/court.ts`). El lienzo lógico es fijo (1536 × 1024, igual que la
+lámina) y el escalador de Phaser pone márgenes, así que **agrandar la ventana no
+puede mover una marca de tiro ni cambiar un resultado**. Hay una prueba que lo
+verifica.
 
-`groundFromScreen()` hace la inversa sobre el plano del suelo, para convertir
-posiciones de puntero a coordenadas de juego.
+`groundFromScreen()` hace la inversa sobre el suelo y `planeFromScreen()` sobre
+cualquier plano horizontal — con eso se ubicaron la pelota y los personajes de la
+referencia, que están a distintas alturas.
 
-### Densidad de píxel
+### Escala de los sprites
 
-Ver `docs/VISUAL_SPEC.md`. En resumen: todo se dibuja a 768 × 512 y se muestra a
-×2, y nada se escala de forma fraccionaria — los personajes tienen 8 alturas
-dibujadas y la pelota 6 tamaños.
+La lámina es una ilustración a 1536 × 1024, no una grilla de píxel gruesa, así que
+los sprites se dibujan una sola vez a tamaño canónico y se escalan suavemente con
+la profundidad. Una versión anterior generaba varios tamaños enteros para
+preservar una grilla de píxel; con este arte eso no corresponde.
 
 ## Estructura
 
 ```
-references/                  las tres imágenes de referencia (hoy vacío)
-public/assets/               arte definitivo cuando exista
-  backgrounds/ characters/ props/ audio/ ui/
+references/                  las tres imágenes de referencia
+public/assets/
+  backgrounds/               la lámina y el primer plano recortado de ella
+  props/                     frente del aro recortado de la lámina
+  characters/ audio/         lo que todavía falta producir
 scripts/
+  png.mjs crop.mjs           lectura/escritura de PNG y recortes ampliados
+  landmarks.mjs              detección de la pintura de la cancha
+  fitCamera.mjs              ajuste de cámara contra la lámina
+  cutLayers.mjs              recorte de las capas de oclusión
+  worldPoints.mjs            pantalla -> mundo, para ubicar objetos
   viteChubolAssets.ts        plugin: arma el manifiesto de archivos en el build
   capture.mjs                capturas reales y revisión de consola con Chrome
-  sweep.ts                   utilidad de calibración
 src/
   main.ts                    configuración del juego
   game/
     config/
-      court.ts               geometría, cámara, encuadre, las siete marcas
+      court.ts               cámara calibrada, geometría y las siete marcas
       gameplay.ts            física, sensación de tiro, reglas por defecto
     domain/                  reglas puras, sin renderer
       match.ts               parejas, minuto, vuelta obligatoria, resultado
@@ -95,9 +124,9 @@ src/
       projection.ts          cámara pinhole, suelo + altura
       ball.ts                vuelo, contactos, enceste, perfil de tiro
     render/
-      palette.ts pixelFont.ts pixelCanvas.ts
-      plate.ts objects.ts characters.ts   generadores de arte provisional
-      textures.ts            construye y registra todas las texturas
+      palette.ts pixelCanvas.ts
+      characters.ts objects.ts   sprites provisionales (adultos y pelota)
+      textures.ts            construye y registra las texturas generadas
       courtView.ts           composición, profundidad, oclusión
       hud.ts ui.ts audio.ts
     scenes/

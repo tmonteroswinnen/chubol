@@ -1,168 +1,177 @@
 # Especificación visual
 
-## Estado honesto, primero
+## Estado
 
-**Las tres imágenes de referencia no están en el repositorio.** Busqué en el
-checkout completo y en `Downloads/`:
+**El arte ya está y el juego corre adentro de él.** La lámina
+`public/assets/backgrounds/chubol-court-clean-v1.png` (1536 × 1024) es el fondo
+real del juego. Las tres referencias están en `references/`.
 
-| Archivo esperado | Estado |
-|---|---|
-| `references/chubol-nba-jam.png` | ❌ no existe |
-| `references/chubol-croquis.jpg` | ❌ no existe |
-| `references/chubol-perro.png` | ❌ no existe |
+Lo que el juego dibuja encima de la lámina es solamente:
 
-Además, esta sesión **no tiene generación ni edición de imágenes**. Verifiqué las
-herramientas disponibles: hay Node, pnpm, Git y Chrome (que uso para capturas
-reales y revisión de consola). No hay ninguna herramienta que produzca pixel art.
+- **los cuatro amigos** — provisionales, generados por código;
+- **la pelota de juego** — provisional;
+- los anillos punteados de las marcas y la interfaz.
 
-Por lo tanto:
+Todo lo demás que ves es tu arte: cancha, líneas, los siete números, aro,
+tablero, red de cadenas, paredes, cipreses, alambrado, calle, arbustos, el chico
+de River, el perro, la mesa con la licuadora y las frutas, el cajón, la regadera,
+la pelota de fútbol decorativa y el logo CHUBOL. **El juego no vuelve a dibujar
+nada de eso encima.**
 
-- **La fidelidad visual a la ilustración está PENDIENTE y no está medida.** No se
-  puede afirmar parecido con una imagen que no vi.
-- Todo el arte que se ve hoy es **provisional, generado por código**, y está
-  marcado como tal dentro del juego con un cartel "ARTE PROVISIONAL — MODO
-  DESARROLLO".
-- La escena de comparación dice explícitamente que falta la referencia en vez de
-  simular una comparación.
+Mientras falten los sprites de los adultos y la pelota, el juego muestra el
+cartel **ARTE PROVISIONAL — MODO DESARROLLO**. Desaparece solo cuando esos
+archivos existan.
 
-Lo que sí está construido y no cambia cuando llegue el arte: la cámara, la
-calibración, la proyección, las capas, la oclusión, los pivotes, la densidad de
-píxel y toda la lógica. Cuando aparezcan las imágenes se reemplazan texturas, no
-arquitectura.
+---
+
+## Calibración: cómo se metió el juego adentro del cuadro
+
+La cámara no se eligió, se **midió**. Todo está en `scripts/fitCamera.mjs`.
+
+1. Se recortaron zonas de la lámina a 4×–8× (`scripts/crop.mjs`) y se leyeron las
+   posiciones exactas de: las cuatro esquinas de la llave, dónde cruza cada arco
+   el eje de la llave, el aro, y las esquinas del tablero.
+2. Se resolvieron por mínimos cuadrados los 17 parámetros de cámara y geometría
+   (Nelder-Mead con reinicios deterministas).
+3. **Error final: 5,5 px RMS sobre el plano del suelo**, o sea unos 10 cm.
+4. Los centros de los siete números se midieron a 6× y se proyectaron inversamente
+   al suelo: **esas son las posiciones de tiro del juego**, no una reconstrucción
+   a partir de la descripción escrita.
+
+Hay una prueba automática (`tests/projection.test.ts`) que falla si alguien mueve
+la cámara y las marcas dejan de caer sobre sus números pintados.
+
+### Dos trampas que había que evitar
+
+- **El punto más a la derecha de un círculo proyectado NO es el punto más lejano
+  del círculo.** Un círculo se proyecta como elipse. Medir el "vértice" visual de
+  los arcos daba 45 px de error. Se miden donde **cruzan el eje de la llave**.
+- **Una homografía del suelo no fija la escala.** Una cámara cerca con lente
+  corto y una lejos con lente largo dibujan el mismo suelo, y difieren por
+  completo en cómo se proyecta un aro de tres metros. Hizo falta un ancla
+  vertical.
+
+### La escala: por qué el aro queda en 2,18 m
+
+El ancla vertical son **los cuatro adultos de la referencia**. Tomándolos como
+1,75 m, la calibración los reproduce con 5% de error:
+
+| Amigo | Dibujado | Proyectado a 1,75 m |
+|---|---|---|
+| A (gris/violeta) | 236 px | 248 px |
+| B (blanca+sol/azul) | 233 px | 212 px |
+| C (roja/negro) | 267 px | 258 px |
+| D (negra/verde) | 296 px | 303 px |
+
+Que coincidan entre sí a lo largo de toda la profundidad de la cancha dice que la
+perspectiva del dibujo es internamente consistente y que el único grado de
+libertad era la escala global.
+
+Con esa escala, **el aro queda a unos 2,18 m**: una canasta casera de patio, no
+reglamentaria. La altura del aro nunca me la diste, así que manda el dibujo.
+
+El chico de River sale 1,52 m con la misma calibración — coherente con 13 años.
+
+### Medidas que salieron del arte
+
+| Qué | Valor | De dónde |
+|---|---|---|
+| Aro | 2,18 m de alto, 0,32 m de radio | anillo de 95 px a 145 px/m |
+| Pelota | 0,175 m de radio | 43 px a ~118 px/m en la referencia |
+| Llave | 3,07 m de largo, 2,72 m de ancho | esquinas pintadas |
+| El aro sobresale | 0,94 m adentro de la línea de fondo | como en una cancha real |
+
+La relación pelota/aro que sale del dibujo es 0,53 — **exactamente** la de una
+pelota de básquet real contra un aro real. El dibujo es consistente consigo mismo;
+simplemente dibuja todo un poco más grande, como NBA Jam.
+
+---
+
+## Diferencias que encontré entre el arte y lo escrito
+
+Las anoto en vez de resolverlas por mi cuenta.
+
+1. **Las paredes salen más altas en el dibujo que los 30 cm y 50 cm del croquis.**
+   Midiendo la pared izquierda en la lámina da del orden del doble. El croquis
+   dice claramente "Pared de ladrillo 30cm" (la izquierda) y "50cm" (la del
+   frente). El juego usa la geometría del dibujo. Si querés que las paredes se
+   respeten como medidas reales, hay que repintarlas más bajas.
+
+2. **Hay un cuarto ciprés en la lámina.** El croquis dibuja tres y el pedido
+   original habla de tres cipreses principales. La lámina tiene uno más a la
+   derecha. Puede ser "el resto de la vegetación" o puede ser de más.
+
+3. **La lámina limpia no es un parche de la referencia: es un redibujo.** Un
+   análisis pixel a pixel da 94,6% de píxeles distintos y algo menos de detalle
+   fino. Los cuatro adultos y la pelota efectivamente no están, el 7 quedó
+   visible, y las líneas tapadas se reconstruyeron bien (0–3 px de desvío salvo
+   en el vértice del arco, donde hay 5–7 px). Pero la red del aro quedó
+   redibujada. Nada de esto rompe el juego —la calibración se hizo contra la
+   lámina, no contra la referencia— pero conviene saberlo si en algún momento las
+   querés superponer.
+
+4. **El 8 está afuera del arco, y eso está bien.** Un análisis automático sugirió
+   que el 8 debía ir en el vértice del arco; abrí el croquis y **no**: ahí el 8
+   está claramente por fuera del arco, a la derecha. La lámina lo pinta bien y el
+   juego lo usa así.
 
 ---
 
 ## Invariantes que el arte definitivo debe respetar
 
-Estas son las reglas que el código ya impone y que la producción de arte no puede
-romper.
-
 ### Cámara y encuadre
 
-- Vista elevada en tres cuartos, **fija**. No orbita, no rota, no hay cenital, no
-  hay scroll. `CAMERA` en `src/game/config/court.ts`.
-- La cámara está corrida a la derecha del aro (`x = 8.5`), no de frente. Esa
-  oblicuidad es lo que hace que el tablero se lea como un tablero y no como una
-  línea vista de canto. Si se pone la cámara de frente al tablero, desaparece.
-- Lienzo lógico fijo de **1536 × 1024** (3:2, igual que la lámina de referencia).
-  En otras pantallas se adapta con márgenes (`Phaser.Scale.FIT` + `CENTER_BOTH`):
-  nunca se estira ni se recorta el aro, el perro o el trofeo.
-- Aro y tablero a la izquierda; el espacio de juego se extiende hacia la derecha.
-- El logo **CHUBOL** va arriba al centro, naranja/amarillo con contorno oscuro y
-  acabado pixel art. No es una tipografía web: son glifos de 5×7 píxeles
-  (`src/game/render/pixelFont.ts`).
+- Vista elevada en tres cuartos, **fija**. No orbita, no rota, no hay cenital.
+- Lienzo lógico fijo de **1536 × 1024**, igual que la lámina. En otras pantallas
+  se adapta con márgenes (`Phaser.Scale.FIT`): nunca se estira ni se recorta.
+- **La cámara está calibrada contra la lámina.** Si se cambia la lámina, hay que
+  volver a correr `node scripts/fitCamera.mjs`.
 
-### Densidad de píxel
+### Capas y orden de dibujo
 
-Una sola grilla para todo. El arte se dibuja a **768 × 512** y se muestra a **×2**
-en el lienzo de 1536 × 1024 (`ART_SCALE` en `src/game/render/pixelCanvas.ts`).
-
-Nada se muestra nunca a escala fraccionaria. Los personajes que deben cambiar de
-tamaño con la profundidad **no se reescalan**: existen en 8 alturas dibujadas
-(48, 51, 54, 57, 60, 63, 66, 69 px de arte) y se elige la más cercana. La pelota
-tiene 6 tamaños. El arte definitivo tiene que entregarse igual, o el tamaño de
-píxel va a variar entre el fondo y los personajes.
-
-Filtrado: nearest-neighbour en todas las texturas. Sin desenfoque, sin suavizado.
-
-### Escenario
-
-| Elemento | Invariante |
-|---|---|
-| Superficie | Pasto natural, irregular, con zonas gastadas donde más se juega. Nunca parquet, cemento ni asfalto. |
-| Líneas | Blancas, pintadas sobre el pasto, con desgaste. Rectángulo de la llave, extremo redondeado, arco exterior. |
-| Puntajes en el piso | 2, 3, 4, 5, 6, 7 y 8, en las siete posiciones. La 7 existe aunque una figura la tape. |
-| Aro | Uno solo, a la izquierda. Metálico, con red de **cadenas** con eslabones reconocibles. |
-| Tablero | Rectangular, de tablones de madera rústica envejecida, marca blanca simple. **No vidrio ni acrílico.** |
-| Soporte | Estructura de madera, casera. |
-| Pared izquierda | Ladrillo visto, ~30 cm. |
-| Pared del frente | Ladrillo visto, ~50 cm, con arbustos por fuera. Es capa de **primer plano**: tapa pies y pelota. |
-| Fondo | **No hay pared de ladrillos atrás.** |
-| Cipreses | Tres, anchos y frondosos, en las posiciones de `BACKGROUND.cypressXs`. |
-| Alambrado | Entre los cipreses y la calle. Postes de madera y alambres horizontales finos, se ve la calle a través. |
-| Calle | Una sola, de tierra, **recta y paralela al lateral largo**. No se curva. |
-| Sin | Casas, edificios, autos, tribunas, instalaciones deportivas, cartel de "buenos amigos", marcadores superiores, barras TURBO. |
-| Objetos | Regadera, pelota de fútbol (decoración, no es una segunda pelota de juego), cajón "CHUBOL SIEMPRE". |
-| Trofeo | Mesa de madera con licuadora (base roja y crema, vaso transparente, tapa) y frutas: bananas, naranjas, manzanas. |
-
-#### Una licencia de ilustración, declarada
-
-El horizonte geométrico real de esta cámara cae **por encima** del cuadro. Más
-allá de la calle no hay nada modelado: se pinta cielo desde el borde superior
-hasta el borde lejano de la calle, con una franja de vegetación lejana que cierra
-la composición. Es una convención de ilustración (lo mismo que hace un dibujo),
-no un render de terreno distante. Está en `drawDistantBand()` en
-`src/game/render/plate.ts`.
-
-### Personajes
-
-Exactamente **cuatro adultos** dentro de la cancha, de piel clara, contextura
-normal y delgada. **Sin musculatura exagerada**: la referencia a NBA Jam es de
-lenguaje visual y energía, no de anatomía.
-
-| # | Vestimenta | Posición en el cuadro de referencia |
-|---|---|---|
-| A | Musculosa gris, shorts violetas | Izquierda, dentro de la llave |
-| B | Musculosa blanca con sol amarillo, shorts azules | Zona posterior central |
-| C | Musculosa roja, shorts negros, vincha roja | Centro-derecha, con la pelota |
-| D | Musculosa negra, shorts verdes | Primer plano derecho, de espaldas |
-
-Identidad constante: la misma cara, la misma ropa y la misma escala en todos los
-fotogramas. Nada de parpadeos de ropa, cambios de talla, bordes blancos ni
-deslizamiento de pies.
-
-**Sin tapones.** No hay ni puede haber animación de bloquear un tiro, marcar
-encima del tirador ni disputar la pelota.
-
-### Chico y perro
-
-- Chico de **13 años**, más bajo, proporciones adolescentes. Equipo completo de
-  River: camiseta blanca con banda roja diagonal y escudo, shorts negros, medias
-  largas blancas con detalle rojo, botines. Es **espectador**, no un quinto
-  participante.
-- Perro mestizo de aspecto pastor: orejas triangulares erguidas, hocico alargado
-  oscuro, pelaje marrón oscuro/negro con zonas atigradas, pecho crema, puntas
-  blancas en las patas delanteras.
-- **Pelo corto, liso y pegado al cuerpo**, también en cuello y cola. No es un
-  pastor de pelo largo ni un labrador de orejas caídas.
-- Van juntos, a la derecha, fuera del espacio de lanzamiento.
-- **Están separados del fondo**, como sprites propios con dos fotogramas de
-  animación ambiental (el perro mueve la cola, el chico festeja al final). No son
-  una copia pegada sobre el fondo.
-
-Total de personas: cuatro adultos más el chico = cinco. Un solo perro.
-
----
-
-## Capas y orden de dibujo
-
-Definido en `DEPTHS` en `src/game/render/courtView.ts`.
+`DEPTHS` en `src/game/render/courtView.ts`:
 
 ```
-  0    fondo (cielo, calle, alambrado, cipreses, pasto, líneas, números, pared izquierda)
- 10    aro: poste, tablero y mitad lejana del anillo
- 20    marcas de tiro
- 30    sombras de contacto
-100+   entidades ordenadas por profundidad de cámara (nearer = encima)
-900    aro: mitad cercana del anillo y cadenas  → la pelota pasa POR DETRÁS
-1000   primer plano: pared del frente y arbustos → tapan pies y pelota
-1200   efectos y logo
+   0   la lámina entera
+  20   anillos punteados de las marcas
+  30   sombras de contacto
+100+   personajes y pelota, ordenados por profundidad (más cerca = encima)
+ 900   frente del aro: mitad cercana del anillo y las cadenas
+1000   primer plano: pared del frente y arbustos
+1200   efectos
 2000   interfaz
 ```
 
-El aro está partido en dos capas justamente para que un enceste se vea bien: la
-pelota pasa por delante del tablero y por detrás del aro cercano y las cadenas.
+Las dos capas de arriba **se recortan de la propia lámina** con
+`scripts/cutLayers.mjs`, no se repintan:
 
----
+- `court-foreground.png`: todo lo que está por debajo del borde superior de la
+  pared del frente, para que tape los pies de quien esté detrás.
+- `hoop-front.png`: la mitad cercana del anillo y la red, para que la pelota pase
+  **por detrás** al entrar.
 
-## Interfaz
+### Personajes
 
-- El escenario ocupa casi toda la pantalla. La interfaz acompaña, no es un panel.
-- Franja fina abajo: turno, marcador, indicación breve. Reloj y vuelta arriba al
-  centro, fuera del aro, del perro y del trofeo.
-- La barra de carga aparece **sólo** mientras se prepara un tiro.
-- **No hay** paneles grandes "Jugador 1 / Jugador 2" ni barras TURBO.
-- Nada de nombres de motores, coordenadas ni advertencias de desarrollo para el
-  jugador normal. El único cartel técnico es el de arte provisional, y desaparece
-  solo cuando el arte definitivo esté en su lugar.
-- Modo captura limpia: en la escena de comparación, `H` oculta toda la interfaz.
+Exactamente cuatro adultos, de contextura normal y delgada, **nunca musculosos**.
+Identidad constante entre fotogramas.
+
+| # | Vestimenta |
+|---|---|
+| A | Musculosa gris, shorts violetas |
+| B | Musculosa blanca con sol amarillo, shorts azules |
+| C | Musculosa roja, shorts negros, vincha roja |
+| D | Musculosa negra, shorts verdes |
+
+**Sin tapones.** No hay ni puede haber animación de bloquear un tiro.
+
+El chico y el perro están pintados en la lámina y **no se dibujan de nuevo**. Si
+alguna vez se los quiere animar, hay que separarlos del fondo primero.
+
+### Interfaz
+
+- El reloj y las marcas que faltan van **arriba a la izquierda**: el logo CHUBOL
+  está pintado en el arte, arriba al centro, y no se tapa.
+- Franja fina abajo con turno, marcador e indicación.
+- La barra de carga aparece solo mientras se prepara un tiro.
+- No hay paneles grandes de jugador ni barras TURBO.
+- `H` en la escena de comparación oculta toda la interfaz para capturar.

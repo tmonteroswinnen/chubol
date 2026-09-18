@@ -1,58 +1,51 @@
 # Manifiesto de recursos
 
-Estado real al momento de escribir esto: **ningún recurso gráfico existe**. Todo lo
-que se ve corre sobre arte provisional generado por código en
-`src/game/render/`. El estado lo calcula el build (`scripts/viteChubolAssets.ts`),
+El estado lo calcula el build (`scripts/viteChubolAssets.ts`) escaneando el disco,
 no está escrito a mano: si copiás un archivo a su ruta, el juego lo detecta.
 
-## Referencias (las provee el autor del proyecto)
+## Arte entregado, en uso
 
-| Archivo | Uso | Tamaño | Estado |
+| Ruta | Qué es | Tamaño | Procedencia |
 |---|---|---|---|
-| `references/chubol-nba-jam.png` | Composición, cámara, personajes, paleta, densidad de píxel | 1536 × 1024 | **falta** |
-| `references/chubol-croquis.jpg` | Posiciones y valores de tiro | — | **falta** |
-| `references/chubol-perro.png` | Rasgos del perro | — | **falta** |
+| `public/assets/backgrounds/chubol-court-clean-v1.png` | La cancha entera salvo los cuatro adultos y la pelota | 1536 × 1024 | entregada por el autor |
+| `public/assets/backgrounds/court-foreground.png` | Pared del frente y arbustos: tapan los pies | 1536 × 1024 | recortada de la lámina por `scripts/cutLayers.mjs` |
+| `public/assets/props/hoop-front.png` | Mitad cercana del anillo y la red de cadenas | 1536 × 1024 | recortada de la lámina por `scripts/cutLayers.mjs` |
 
-## Recursos a producir
+## Referencias
 
-| Clave | Ruta | Uso | Tamaño | Pivote | Estado |
-|---|---|---|---|---|---|
-| `plate.background` | `public/assets/backgrounds/court-clean.png` | Fondo limpio, sin jugadores ni pelota ni sombras de ellos | 1536 × 1024 | sup. izq. | **falta** |
-| `plate.foreground` | `public/assets/backgrounds/court-foreground.png` | Pared del frente y arbustos que tapan pies y pelota | 1536 × 1024 | sup. izq. | **falta** |
-| `hoop.back` | `public/assets/props/hoop-back.png` | Poste, tablero y mitad lejana del anillo | 1536 × 1024 | sup. izq. | **falta** |
-| `hoop.front` | `public/assets/props/hoop-front.png` | Mitad cercana del anillo y cadenas | 1536 × 1024 | sup. izq. | **falta** |
-| `logo` | `public/assets/ui/chubol-logo.png` | Logo CHUBOL, naranja/amarillo con contorno | variable | centro | **falta** |
-| `ball` | `public/assets/props/ball.png` | Pelota: 6 tamaños × 4 rotaciones | atlas | centro | **falta** |
-| `character.a` | `public/assets/characters/friend-a.png` | Musculosa gris, shorts violetas — 11 poses × 8 tamaños | atlas 73×97 por celda | pies | **falta** |
-| `character.b` | `public/assets/characters/friend-b.png` | Musculosa blanca con sol, shorts azules | atlas 73×97 | pies | **falta** |
-| `character.c` | `public/assets/characters/friend-c.png` | Musculosa roja, shorts negros, vincha | atlas 73×97 | pies | **falta** |
-| `character.d` | `public/assets/characters/friend-d.png` | Musculosa negra, shorts verdes | atlas 73×97 | pies | **falta** |
-| `character.d.back` | `public/assets/characters/friend-d-back.png` | El mismo, de espaldas | atlas 73×97 | pies | **falta** |
-| `kid` | `public/assets/characters/kid-river.png` | Chico de 13 con equipo de River — idle0, idle1, cheer | atlas | pies | **falta** |
-| `dog` | `public/assets/characters/dog.png` | Perro de pelo corto — idle0, idle1 | atlas | pies | **falta** |
-| `trophy` | `public/assets/props/trophy-table.png` | Mesa con licuadora y frutas | variable | pies | **falta** |
-| `audio.chain` | `public/assets/audio/chain.wav` | Cadena metálica al embocar | — | — | **falta** (hoy sintetizado) |
-| `audio.board` | `public/assets/audio/board.wav` | Golpe de madera | — | — | **falta** (hoy sintetizado) |
+| Ruta | Uso |
+|---|---|
+| `references/chubol-nba-jam.png` | Composición, personajes, paleta. De acá salieron las posiciones y la escala. |
+| `references/chubol-croquis.jpg` | Croquis original. Confirma las siete marcas y que el 8 va por fuera del arco. |
+| `references/chubol-perro.png` | Rasgos del perro. |
 
-## Poses de los adultos
+## Lo que falta producir
 
-Orden de columnas del atlas:
+| Ruta | Qué | Formato |
+|---|---|---|
+| `public/assets/characters/friend-a.png` | Musculosa gris, shorts violetas | atlas de 11 poses, celdas de 281 × 352 |
+| `public/assets/characters/friend-b.png` | Musculosa blanca con sol, shorts azules | ídem |
+| `public/assets/characters/friend-c.png` | Musculosa roja, shorts negros, vincha | ídem |
+| `public/assets/characters/friend-d.png` | Musculosa negra, shorts verdes | ídem |
+| `public/assets/characters/friend-d-back.png` | El mismo D, de espaldas | ídem |
+| `public/assets/props/ball.png` | Pelota de juego | atlas de 6 rotaciones, celdas de 48 × 48 |
+| `public/assets/audio/chain.wav` | Cadena metálica al embocar | opcional (hoy sintetizado) |
+| `public/assets/audio/board.wav` | Golpe de madera | opcional (hoy sintetizado) |
+
+Poses del atlas, en orden:
 
 `idle0` · `idle1` · `walk0` · `walk1` · `walk2` · `walk3` · `hold` · `wind` ·
 `release` · `follow` · `cheer`
 
-## Tamaños de los adultos
+Especificaciones completas, invariantes y cómo verificar el reemplazo:
+[`ASSET_REQUESTS.md`](ASSET_REQUESTS.md).
 
-Orden de filas del atlas, altura del personaje en píxeles de arte (1,75 m):
+## Medidas que salieron del arte
 
-`48` · `51` · `54` · `57` · `60` · `63` · `66` · `69`
-
-Se elige el tamaño más cercano según la profundidad. **No se reescala**: cada
-tamaño está dibujado a ese tamaño, para que la grilla de píxel no cambie entre el
-fondo y los personajes.
-
-## Procedencia
-
-Nada de esto fue generado en esta sesión. No hay herramienta de imagen disponible
-y no se contrató ningún servicio. Las especificaciones y los prompts de producción
-están en [`ASSET_REQUESTS.md`](ASSET_REQUESTS.md).
+| Qué | Valor | Cómo se midió |
+|---|---|---|
+| Altura del aro | 2,18 m | escala fijada por los cuatro adultos a 1,75 m |
+| Radio del aro | 0,32 m | anillo de 95 px a 145 px/m |
+| Radio de la pelota | 0,175 m | 43 px a ~118 px/m en la referencia |
+| Llave | 3,07 × 2,72 m | esquinas pintadas, a 4× de zoom |
+| Error de calibración | 5,5 px RMS en el suelo | `node scripts/fitCamera.mjs` |

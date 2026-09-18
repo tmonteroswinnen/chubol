@@ -1,19 +1,12 @@
 import Phaser from 'phaser';
 
 /**
- * Every texture in the game is authored on one pixel grid and shown at one fixed
- * magnification, so background, characters, ball and props share the same pixel
- * size. `ART_SCALE` is that magnification: art is drawn at 768 x 512 and shown on
- * the 1536 x 1024 logical canvas.
- *
- * Nothing is ever displayed at a fractional scale. Sprites that must change size
- * with depth are generated at several whole-pixel sizes instead of being
- * resampled, which is also how the real artwork will have to be delivered.
+ * The supplied plate is 1536 x 1024, the same size as the logical canvas, and it
+ * is a high-resolution illustration rather than a low-resolution pixel grid. So
+ * generated art is authored at that same density: one art pixel is one logical
+ * pixel.
  */
-export const ART_SCALE = 2;
-
-/** Converts a logical canvas coordinate into the art grid. */
-export const toArt = (logical: number): number => logical / ART_SCALE;
+export const ART_SCALE = 1;
 
 export interface PixelSurface {
   readonly canvas: HTMLCanvasElement;
@@ -40,10 +33,15 @@ export function createSurface(width: number, height: number, readBack = false): 
  * Registers a surface as a texture with nearest-neighbour filtering, replacing
  * any texture already under that key so a scene restart cannot leak textures.
  */
-export function registerTexture(scene: Phaser.Scene, key: string, surface: PixelSurface): void {
+export function registerTexture(
+  scene: Phaser.Scene,
+  key: string,
+  surface: PixelSurface,
+  filter: Phaser.Textures.FilterMode = Phaser.Textures.FilterMode.LINEAR,
+): void {
   if (scene.textures.exists(key)) scene.textures.remove(key);
   const texture = scene.textures.addCanvas(key, surface.canvas);
-  texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  texture?.setFilter(filter);
 }
 
 /** Fills an axis-aligned rectangle on whole pixels. */
