@@ -120,6 +120,11 @@ export class ShotSimulation {
     return this.elapsed;
   }
 
+  /** True once the ball has hit the grass, after which it can no longer score. */
+  get landed(): boolean {
+    return this.touchedGround;
+  }
+
   /**
    * Feeds wall-clock time into the simulation. Integration always runs at a fixed
    * step, so the trajectory and the outcome are identical at any frame rate.
@@ -128,7 +133,11 @@ export class ShotSimulation {
     const events: SimEvent[] = [];
     if (this.outcome !== null) return events;
 
-    this.accumulator += Math.min(Math.max(deltaSeconds, 0), PHYSICS.maxFrameSeconds);
+    // A non-finite delta would poison the accumulator: the while below never
+    // runs again and the ball hangs in the air, unresolved, for the rest of the
+    // match. Same defence as the clock in Match.tick.
+    const step = Number.isFinite(deltaSeconds) ? deltaSeconds : 0;
+    this.accumulator += Math.min(Math.max(step, 0), PHYSICS.maxFrameSeconds);
     while (this.accumulator >= PHYSICS.fixedStep) {
       this.accumulator -= PHYSICS.fixedStep;
       this.substep(events);
@@ -198,6 +207,12 @@ export class ShotSimulation {
 
     if (r <= opening) {
       if (this.passedUpThroughRing) return;
+      // Once it has bounced on the grass it is out. Partly because that is how
+      // it works in a backyard, and partly because it lets the solver that
+      // measures the green band stop a shot the moment it lands: without that
+      // cut it has to keep simulating every bad shot rolling around the grass,
+      // and solving one mark took long enough to stutter the frame you press on.
+      if (this.touchedGround) return;
       events.push({ kind: 'made' });
       this.finish('made', events);
       return;
@@ -264,7 +279,12 @@ export class ShotSimulation {
 /** Runs an attempt to completion without a renderer. Used by tests and tuning. */
 export function simulateToOutcome(launch: BallState): ShotOutcome {
   const sim = new ShotSimulation(0, launch);
-  while (sim.resolved === null) sim.advance(1 / 60);
+  while (sim.resolved === null) {
+    // A ball on the grass cannot score any more, so there is nothing left to
+    // learn from watching it settle.
+    if (sim.landed) return 'missed';
+    sim.advance(1 / 60);
+  }
   return sim.resolved;
 }
 
@@ -291,44 +311,111 @@ export interface Interval {
   readonly high: number;
 }
 
-const SCAN_STEP = 0.002;
-const SCAN_LIMIT = 0.09;
-const REFINE_ITERATIONS = 14;
+/**
+ * Step for walking outwards from the ideal speed looking for the edge.
+ *
+ * It has to be smaller than the narrowest gap between the central interval and
+ * the first bank-shot island, which measured 0.009 on the 4-point mark. A
+ * coarser step would step straight over that gap and report the far side of the
+ * island as the edge of the band, which is worse than not looking at all.
+ */
+const SCAN_STEP = 0.004;
+/** How far out the search is willing to walk, as a fraction of the ideal speed. */
+const SCAN_LIMIT = 0.95;
+/**
+ * How much further to keep looking for a bank-shot island once the band has
+ * ended. Every island measured starts within 0.03 of the edge of the band, so
+ * this is a wide margin; it is bounded because walking the whole scan range
+ * looking for something that is not there was most of the cost of a shot.
+ */
+const ISLAND_SPAN = 0.3;
+const REFINE_ITERATIONS = 12;
 
 /**
- * The contiguous band of launch-speed multipliers around the ideal speed that
- * drops the ball straight through the ring.
+ * Where the shot goes in, as launch-speed multipliers over the ideal speed.
  *
- * Over- and under-powered shots can also fall in after banking off the board,
- * but those form separate islands with misses in between, so the search walks
- * outwards in small steps and stops at the first miss instead of bisecting
- * across a gap and landing inside an island.
+ * `low`..`high` is the contiguous band around the ideal speed that drops the
+ * ball straight through the ring — the one the interface draws.
+ *
+ * An over-powered shot can also fall in after banking off the board, and those
+ * form separate islands with misses in between. They are found and reported too,
+ * because the charge bar stretches this interval across a fixed slice of itself
+ * and would otherwise map an island back onto the bar, in a place nothing drew
+ * and nothing promised.
  */
-export function solveMakeInterval(fromX: number, fromY: number): Interval | null {
+export interface MakeRange extends Interval {
+  /** Lowest multiplier above `high` that goes in again, if there is one. */
+  readonly islandAbove: number | null;
+  /** Highest multiplier below `low` that goes in again, if there is one. */
+  readonly islandBelow: number | null;
+}
+
+export function solveMakeRange(fromX: number, fromY: number): MakeRange | null {
   const makes = (multiplier: number): boolean => {
     const launch = launchAtMultiplier(fromX, fromY, multiplier);
     return launch !== null && simulateToOutcome(launch) === 'made';
   };
   if (!makes(1)) return null;
 
-  const edge = (direction: 1 | -1): number => {
+  /** Walks out from the ideal speed to the first miss, then bisects the edge. */
+  const side = (direction: 1 | -1): { edge: number; island: number | null } => {
     let good = 1;
-    let bad = 1 + direction * SCAN_LIMIT;
-    for (let offset = SCAN_STEP; offset <= SCAN_LIMIT; offset += SCAN_STEP) {
+    let bad: number | null = null;
+    let offset = SCAN_STEP;
+    for (; offset <= SCAN_LIMIT; offset += SCAN_STEP) {
       const probe = 1 + direction * offset;
       if (makes(probe)) good = probe;
-      else { bad = probe; break; }
+      else {
+        bad = probe;
+        break;
+      }
     }
+    // It never stopped making: the tolerance is wider than the search. That is
+    // real on the lay-up, where the ball is dropped in from above the ring.
+    if (bad === null) return { edge: good, island: null };
+
+    let hi = bad;
     for (let i = 0; i < REFINE_ITERATIONS; i += 1) {
-      const mid = (good + bad) / 2;
+      const mid = (good + hi) / 2;
       if (makes(mid)) good = mid;
-      else bad = mid;
+      else hi = mid;
     }
-    return good;
+
+    // Keep walking past the gap: is there another stretch that goes in?
+    let island: number | null = null;
+    const islandLimit = Math.min(SCAN_LIMIT, offset + ISLAND_SPAN);
+    for (let probe = offset + SCAN_STEP; probe <= islandLimit; probe += SCAN_STEP) {
+      if (makes(1 + direction * probe)) {
+        island = 1 + direction * probe;
+        break;
+      }
+    }
+    return { edge: good, island };
   };
 
-  return { low: edge(-1), high: edge(1) };
+  const below = side(-1);
+  const above = side(1);
+  return { low: below.edge, high: above.edge, islandBelow: below.island, islandAbove: above.island };
 }
+
+/** The central make interval alone. Kept for the calibration checks. */
+export function solveMakeInterval(fromX: number, fromY: number): Interval | null {
+  const range = solveMakeRange(fromX, fromY);
+  return range === null ? null : { low: range.low, high: range.high };
+}
+
+/**
+ * How far past the make interval the ends of the bar reach when there is no
+ * bank-shot island in the way: enough that a badly timed release is plainly a
+ * bad shot and not a near miss.
+ */
+const OUTSIDE_SPAN = 0.22;
+/**
+ * How much of the gap to the nearest island the bar is allowed to use. Well
+ * short of 1, so the edge of the band and the edge of the island never meet
+ * through rounding.
+ */
+const OUTSIDE_SAFETY = 0.55;
 
 /**
  * Everything an attempt needs: where it is taken from, how the charge bar maps
@@ -360,28 +447,95 @@ export function designedBandWidth(points: number): number {
  * @param points value of the mark being shot from, which sets how wide the
  * scoring band is drawn.
  */
+/**
+ * Profiles already solved, so standing on the same mark twice does not pay for
+ * the search twice.
+ *
+ * Solving one costs tens of milliseconds of simulation, and it is paid at the
+ * instant the button goes down — the worst possible moment for a stutter. The
+ * key is the position rounded to a centimetre, which is far finer than anything
+ * that changes the answer and coarse enough that walking back onto a mark hits
+ * the cache.
+ */
+const profileCache = new Map<string, ShotProfile>();
+const PROFILE_CACHE_LIMIT = 96;
+
+/** Solves the seven marks up front, where the cost is not in anyone's way. */
+export function warmShotProfiles(spots: readonly { x: number; y: number; points: number }[]): void {
+  for (const spot of spots) createShotProfile(spot.x, spot.y, spot.points);
+}
+
 export function createShotProfile(fromX: number, fromY: number, points: number): ShotProfile | null {
+  const key = `${Math.round(fromX * 100)}:${Math.round(fromY * 100)}:${points}`;
+  const cached = profileCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const profile = solveShotProfile(fromX, fromY, points);
+  if (profile !== null) {
+    if (profileCache.size >= PROFILE_CACHE_LIMIT) profileCache.clear();
+    profileCache.set(key, profile);
+  }
+  return profile;
+}
+
+function solveShotProfile(fromX: number, fromY: number, points: number): ShotProfile | null {
   const ideal = idealLaunchSpeed(fromX, fromY);
   if (ideal === null) return null;
-  const interval = solveMakeInterval(fromX, fromY);
-  if (interval === null) return null;
+  const range = solveMakeRange(fromX, fromY);
+  if (range === null) return null;
 
   const distance = distanceToRim(fromX, fromY);
   const halfBand = designedBandWidth(points) / 2;
   const sweet = SHOT.sweetSpot;
-  // Charge is stretched independently on each side, because the physical
-  // tolerance is not symmetric around the ideal speed.
-  const slopeLow = (1 - interval.low) / halfBand;
-  const slopeHigh = (interval.high - 1) / halfBand;
+  const bandLow = sweet - halfBand;
+  const bandHigh = sweet + halfBand;
+
+  /*
+   * Outside the band the bar stops following the same slope and runs to a limit
+   * instead.
+   *
+   * The reason is the bank shots. The band is stretched to cover the make
+   * interval exactly, so the rest of the bar covers whatever lies beyond it —
+   * and beyond it, on five of the seven marks, there is a second stretch of
+   * speeds that goes in off the board. With a single slope those landed back on
+   * the bar in a place nothing drew: on the 5-point mark, holding to the very
+   * top was five guaranteed points, through a window WIDER than the painted one.
+   *
+   * So each side runs to a limit that stops short of the nearest island. Where
+   * there is no island, it runs to a plainly bad shot. The promise the bar makes
+   * is then true in both directions: inside the green it goes in, outside it
+   * does not.
+   */
+  const gapAbove = range.islandAbove === null ? null : range.islandAbove - range.high;
+  const gapBelow = range.islandBelow === null ? null : range.low - range.islandBelow;
+  const ceiling = gapAbove === null ? range.high + OUTSIDE_SPAN : range.high + gapAbove * OUTSIDE_SAFETY;
+  const floor = gapBelow === null ? range.low - OUTSIDE_SPAN : range.low - gapBelow * OUTSIDE_SAFETY;
+
+  const multiplierFor = (charge: number): number => {
+    if (charge <= bandLow) {
+      // Below the band: down to a shot that falls visibly short.
+      const t = bandLow <= 0 ? 1 : (bandLow - charge) / bandLow;
+      return range.low - (range.low - floor) * Math.min(1, Math.max(0, t));
+    }
+    if (charge >= bandHigh) {
+      const t = bandHigh >= 1 ? 0 : (charge - bandHigh) / (1 - bandHigh);
+      return range.high + (ceiling - range.high) * Math.min(1, Math.max(0, t));
+    }
+    // Inside the band, the mapping is the one that makes the band true: the two
+    // halves are stretched separately, because the tolerance is not symmetric
+    // around the ideal speed.
+    return charge < sweet
+      ? 1 - ((sweet - charge) / halfBand) * (1 - range.low)
+      : 1 + ((charge - sweet) / halfBand) * (range.high - 1);
+  };
 
   return {
     fromX,
     fromY,
     distance,
     idealSpeed: ideal,
-    window: { low: sweet - halfBand, high: sweet + halfBand },
-    multiplierFor: (charge: number): number =>
-      charge < sweet ? 1 - (sweet - charge) * slopeLow : 1 + (charge - sweet) * slopeHigh,
+    window: { low: bandLow, high: bandHigh },
+    multiplierFor,
   };
 }
 

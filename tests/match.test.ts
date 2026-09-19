@@ -80,12 +80,71 @@ describe('CHUBOL match: pairs, one minute each', () => {
     expect(match.canShootFrom('p8')).toBe(true);
   });
 
-  it('opens every mark again once the lap is complete', () => {
+  it('opens every mark again once the lap is complete, except the one just shot', () => {
     const match = new Match(config());
     match.startTurn();
     fullLap(match, false);
     expect(match.lapsCompletedThisTurn).toBe(1);
-    for (const spot of SHOT_SPOTS) expect(match.canShootFrom(spot.id)).toBe(true);
+
+    // Without this you leave the 8 for last, the lap resets under your feet and
+    // you shoot it again without moving, which is the opposite of the rule that
+    // every mark has to be shot.
+    const last = SHOT_SPOTS[SHOT_SPOTS.length - 1]!;
+    expect(match.blockedSpot).toBe(last.id);
+    expect(match.canShootFrom(last.id)).toBe(false);
+    for (const spot of SHOT_SPOTS.filter((s) => s.id !== last.id)) {
+      expect(match.canShootFrom(spot.id), spot.id).toBe(true);
+    }
+
+    // One shot anywhere else and it opens up again.
+    shoot(match, SHOT_SPOTS[0]!.id, false);
+    expect(match.canShootFrom(last.id)).toBe(true);
+  });
+
+  it('lets the next pair use the mark the previous one just shot', () => {
+    const match = new Match(config());
+    match.startTurn();
+    shoot(match, 'p5', true);
+    match.endTurn();
+    match.startTurn();
+    expect(match.blockedSpot).toBe(null);
+    expect(match.canShootFrom('p5')).toBe(true);
+  });
+
+  it('refuses to end a turn with a shot still in the air', () => {
+    const match = new Match(config());
+    match.startTurn();
+    match.beginShot('p8', 8);
+    expect(() => match.endTurn()).toThrow();
+  });
+
+  it('refuses to start a turn that is already being played', () => {
+    const match = new Match(config());
+    match.startTurn();
+    expect(() => match.startTurn()).toThrow();
+  });
+
+  it('keeps the clock sane when handed a delta that is not a number', () => {
+    const match = new Match(config());
+    match.startTurn();
+    match.tick(Number.NaN);
+    expect(match.timeLeft).toBe(60_000);
+  });
+
+  it('counts laps really closed, not attempts divided by seven', () => {
+    // Seven attempts by the same pair, spread over two turns, never covering the
+    // seven marks. Dividing attempts by seven called that one lap; it is none.
+    const match = new Match(config());
+    match.startTurn();
+    for (const id of ['p2', 'p3', 'p4', 'p5', 'p6', 'p7'] as const) shoot(match, id, false);
+    match.endTurn();
+    match.startTurn();
+    match.endTurn();
+    match.startTurn();
+    shoot(match, 'p2', false);
+    const standing = match.standings().find((s) => s.teamIndex === 0);
+    expect(standing?.attempts).toBe(7);
+    expect(standing?.laps).toBe(0);
   });
 
   it('reports which marks are still owed in the lap', () => {

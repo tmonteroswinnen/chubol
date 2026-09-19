@@ -27,11 +27,15 @@ Medido contra la física real, con la habilidad por defecto (`skill: 0.5`):
 
 | Marca | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|
-| Emboca | 100 % | 75 % | 78 % | 67 % | 57 % | 53 % | 45 % |
+| Emboca | 82 % | 77 % | 72 % | 65 % | 55 % | 48 % | 37 % |
 
-En un minuto completo llega a tirar entre 11 y 14 veces y termina, según cómo le
-salga, entre **19 y 50 puntos**. Tres partidos medidos en el navegador: 27, 50 y
-19. Es un rival que se puede ganar, pero no regalado.
+Baja parejo con el valor de la marca, que es la regla que pediste. (Antes no:
+embocaba más en la 4 que en la 3, porque se comía sin querer los tiros de tablero
+que la franja no dibujaba. Eso está arreglado, ver
+[RULES.md](RULES.md#la-otra-mitad-de-la-promesa-afuera-no-entra).)
+
+En un minuto completo llega a tirar unas 12 veces y termina alrededor de los
+**30 puntos**. Es un rival que se puede ganar, pero no regalado.
 
 Para hacerla más difícil o más fácil se toca `CPU_DEFAULTS.skill`: con 0,85
 emboca casi todo y con 0,4 falla bastante. No hay un selector de dificultad en el

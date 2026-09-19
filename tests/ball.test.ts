@@ -54,29 +54,47 @@ describe('ball flight and scoring', () => {
     }
   });
 
-  it('still lets a badly overpowered shot bank in off the board, as a real one would', () => {
-    // Not an accident of the scoring code: the ball hits the wooden board and
-    // drops through. It is a separate island of makes, well outside the band, so
-    // it can never be reached by aiming at the green strip.
-    const four = SHOT_SPOTS.find((s) => s.points === 4)!;
-    const profile = createShotProfile(four.x, four.y, four.points)!;
-    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.008)!)).toBe('missed');
-    expect(simulateToOutcome(launchFromProfile(profile, profile.window.high + 0.05)!)).toBe('made');
-  });
+  it('the green band is the whole truth: nothing outside it goes in, on any mark', () => {
+    // The strongest promise the game makes, and the one that used to be only
+    // half true. A badly overpowered shot banks in off the wooden board, and
+    // because the bar stretches the make interval across a fixed slice of
+    // itself, those bank shots landed back on the bar outside the painted band —
+    // on the 5-point mark, holding to the very top was five guaranteed points
+    // through a window WIDER than the one drawn. So the bar is sweeped whole,
+    // mark by mark, and every charge that scores has to be inside the band.
+    for (const spot of SHOT_SPOTS) {
+      const profile = createShotProfile(spot.x, spot.y, spot.points)!;
+      for (let charge = 0; charge <= 1 + 1e-9; charge += 0.002) {
+        const made = simulateToOutcome(launchFromProfile(profile, charge)!) === 'made';
+        // Only the edges themselves are allowed to disagree, by one step: the
+        // band is solved by bisection and lands within a thousandth.
+        const inside = charge >= profile.window.low - 0.003 && charge <= profile.window.high + 0.003;
+        if (made) expect(inside, `marca ${spot.points}: entra en ${charge.toFixed(3)}, fuera de la franja`).toBe(true);
+      }
+    }
+  }, 120000);
 
-  it('plays the mark under the hoop as a forgiving lay-up', () => {
+  it('plays the mark under the hoop as a lay-up, and gives it the widest band', () => {
     // The artwork paints the 2 about 0.36 m from the ring's axis. No arc can
     // score from there — the ball would pass up through the ring — so the
-    // shooter reaches above the rim and drops it in, and a wide range of
-    // releases works. It is the easiest shot and it is worth the least.
+    // shooter reaches above the rim and drops it in. It is the easiest shot and
+    // it is worth the least, but easiest means the most time to let go, not free:
+    // the physical tolerance of the lay-up is enormous and the bar is stretched
+    // to match it, so outside the band it misses like any other mark.
     const two = SHOT_SPOTS.find((s) => s.points === 2)!;
     expect(Math.hypot(two.x - HOOP.groundX, two.y - HOOP.groundY)).toBeLessThan(0.6);
     expect(releaseHeight(two.x, two.y)).toBeGreaterThan(HOOP.rimHeight);
 
     const profile = createShotProfile(two.x, two.y, two.points)!;
-    for (const charge of [0.5, 0.6, 0.72, 0.85, 0.95]) {
-      expect(simulateToOutcome(launchFromProfile(profile, charge)!), `charge ${charge}`).toBe('made');
+    for (const charge of [0.66, 0.72, 0.78]) {
+      expect(simulateToOutcome(launchFromProfile(profile, charge)!), `carga ${charge}`).toBe('made');
     }
+    const widths = SHOT_SPOTS.map((spot) => {
+      const p = createShotProfile(spot.x, spot.y, spot.points)!;
+      return { points: spot.points, width: p.window.high - p.window.low };
+    });
+    const widest = widths.reduce((a, b) => (b.width > a.width ? b : a));
+    expect(widest.points).toBe(2);
   });
 
   it('releases from shoulder height for every mark that is not a lay-up', () => {

@@ -11,6 +11,8 @@ import type { GameSceneData } from './MenuScene';
 export interface ResultSceneData {
   readonly result: MatchResult | null;
   readonly config: MatchConfig;
+  /** Which pair the person was playing, so REVANCHA hands back the same match. */
+  readonly humanTeam?: number | null;
 }
 
 export class ResultScene extends Phaser.Scene {
@@ -32,8 +34,20 @@ export class ResultScene extends Phaser.Scene {
     this.view = new CourtView(this, courtProjection());
     this.view.setMarkersVisible(false);
 
+    // Only the pair that won celebrates. Everyone cheering, losers included,
+    // read as a bug rather than as a party.
+    const winning = new Set((this.sceneData.result?.winners ?? []).map((w) => w.teamIndex));
+    const shared = this.sceneData.result?.shared === true;
     WAITING_SPOTS.forEach((spot, index) => {
-      this.view.setFriend(index, { x: spot.x, y: spot.y, pose: 'cheer', backView: false, visible: true });
+      const theirTeam = Math.floor(index / 2);
+      const happy = shared || winning.size === 0 || winning.has(theirTeam);
+      this.view.setFriend(index, {
+        x: spot.x,
+        y: spot.y,
+        pose: happy ? 'cheer' : 'idle0',
+        backView: false,
+        visible: true,
+      });
     });
     this.view.setBall(0, 0, 0, false);
 
@@ -44,7 +58,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(trophyAt.x, trophyAt.y - 30, 'EL TROFEO', {
         fontFamily: UI_FONT,
-        fontSize: '20px',
+        fontSize: '32px',
         color: PALETTE.hudAccent,
         stroke: '#1a1208',
         strokeThickness: 5,
@@ -87,44 +101,64 @@ export class ResultScene extends Phaser.Scene {
           ? `GANA ${winners[0]!.name.toUpperCase()}`
           : `EMPATE: ${winners.map((w) => w.name.toUpperCase()).join(' y ')}`;
 
-    const background = panel(this, 0, 0, 640, 430);
-    const titleText = heading(this, 0, -170, title, 34);
+    const width = 900;
+    const height = 620;
+    const background = panel(this, 0, 0, width, height);
+    const titleText = heading(this, 0, -height / 2 + 54, title, 44);
 
-    const rows = (result?.standings ?? [])
-      .map(
-        (s, i) =>
-          `${i + 1}. ${s.name.padEnd(10)} ${String(s.score).padStart(3)} pts  (${s.makes}/${s.attempts})\n` +
-          `   ${s.members.join(' y ')}\n   vueltas completas: ${s.laps}`,
-      )
-      .join('\n\n');
-    const table = body(this, -280, -132, rows || 'Sin intentos registrados.', 20);
+    // One block per pair instead of a table of columns: at a size that can be
+    // read on a phone the columns ran into each other.
+    const standings = result?.standings ?? [];
+    const human = this.sceneData.humanTeam ?? null;
+    const rows = standings.length === 0
+      ? 'Sin intentos registrados.'
+      : standings
+          .map((s, i) => {
+            const mine = s.teamIndex === human ? '  (VOS)' : '';
+            return [
+              `${i + 1}.  ${s.name.toUpperCase()}${mine}`,
+              `    ${s.score} puntos   ${s.makes} de ${s.attempts}   ${s.laps} ${s.laps === 1 ? 'vuelta' : 'vueltas'}`,
+            ].join(String.fromCharCode(10));
+          })
+          .join(String.fromCharCode(10) + String.fromCharCode(10));
+    const table = body(this, -width / 2 + 48, -height / 2 + 118, rows, 32);
 
     // A tie has no confirmed resolution yet, so the game says so instead of
     // inventing one silently.
     const note = body(
       this,
-      -280,
-      26,
-      result?.shared === true ? 'Empataron. Falta definir cómo se desempata de verdad.' : '',
-      18,
+      -width / 2 + 48,
+      -height / 2 + 330,
+      result?.shared === true ? ['Empataron y quedó compartido.', 'Falta definir cómo se desempata de verdad.'].join(String.fromCharCode(10)) : '',
+      28,
     );
 
     const rematch = makeButton(
       this,
       0,
-      86,
+      height / 2 - 150,
       'REVANCHA',
       () => {
-        const payload: GameSceneData = { mode: 'challenge', teams: this.sceneData.config.teams };
+        // Carrying humanTeam is what keeps the machine in the rematch. Without
+        // it the rematch quietly turned into two people on one device.
+        const payload: GameSceneData = {
+          mode: 'challenge',
+          teams: this.sceneData.config.teams,
+          humanTeam: this.sceneData.humanTeam ?? null,
+        };
         this.scene.start('Game', payload);
       },
-      { accent: true },
+      { accent: true, width: 460, height: 78, fontSize: 32 },
     );
-    const home = makeButton(this, 0, 160, 'VOLVER AL INICIO', () => this.scene.start('Menu'));
+    const home = makeButton(this, 0, height / 2 - 56, 'VOLVER AL INICIO', () => this.scene.start('Menu'), {
+      width: 460,
+      height: 78,
+      fontSize: 32,
+    });
     this.buttons = [rematch, home];
 
     this.add
-      .container(LOGICAL_WIDTH / 2 - 280, LOGICAL_HEIGHT / 2 - 40, [
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
         background,
         titleText,
         table,

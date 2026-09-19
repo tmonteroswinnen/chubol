@@ -17,7 +17,7 @@ import { Match, defaultMatchConfig, type TeamConfig } from '../domain/match';
 import { CPU_DEFAULTS, CpuPlayer, type CpuView } from '../domain/cpu';
 import { PracticeSession } from '../domain/practice';
 import { nearestSpot, spotAt } from '../domain/spots';
-import { ShotSimulation, createShotProfile, launchFromProfile, type ShotProfile } from '../sim/ball';
+import { ShotSimulation, createShotProfile, launchFromProfile, warmShotProfiles, type ShotProfile } from '../sim/ball';
 import { soundBoard } from '../render/audio';
 import { courtProjection } from '../render/context';
 import { CourtView, DEPTHS } from '../render/courtView';
@@ -114,11 +114,27 @@ export class GameScene extends Phaser.Scene {
     this.lockedSpot = null;
     this.walkTarget = null;
     this.shotId = 0;
+    // Everything below used to survive into the next scene: going from a match
+    // against the machine to free practice left `cpu` and `humanTeam` alive,
+    // and RESTART kept the old countdown and locked points. Harmless today only
+    // because every reader also checks `match`.
+    this.cpu = null;
+    this.humanTeam = null;
+    this.match = null;
+    this.practice = null;
+    this.chargeElapsed = 0;
+    this.lockedPoints = 0;
+    this.feedbackFor = 0;
+    this.breakFor = 0;
+    this.walking = false;
   }
 
   create(): void {
     this.view = new CourtView(this, courtProjection());
     this.hud = new Hud(this);
+    // Solve the seven marks now. Each one costs tens of milliseconds of
+    // simulation and is otherwise paid at the instant the button goes down.
+    warmShotProfiles(SHOT_SPOTS);
 
     if (this.sceneData.mode === 'challenge') {
       const base = defaultMatchConfig(this.sceneData.teams);
@@ -220,10 +236,10 @@ export class GameScene extends Phaser.Scene {
         this.walkTarget = { x: command.x, y: command.y };
         break;
       case 'press':
-        this.startCharge();
+        this.startCharge('machine');
         break;
       case 'release':
-        this.release();
+        this.release('machine');
         break;
       default:
         break;
@@ -411,15 +427,26 @@ export class GameScene extends Phaser.Scene {
     return this.match.canShootFrom(spot.id);
   }
 
-  private startCharge(): void {
+  /**
+   * @param by who is asking. The machine drives the game through exactly the
+   * same two calls a person does, so the check that keeps a person from shooting
+   * on top of the machine's minute has to know which of the two is calling —
+   * otherwise it locks the machine out of its own turn.
+   */
+  private startCharge(by: 'human' | 'machine' = 'human'): void {
     if (this.paused || this.phase !== 'positioning') return;
     // The button is disabled during the machine's minute, but a finger already
     // resting on it when the turn changes hands would otherwise get through.
-    if (this.cpuIsPlaying()) return;
+    if (by === 'human' && this.cpuIsPlaying()) return;
     const spot = this.currentSpot();
     if (spot === null || !this.canShootHere(spot)) return;
     const profile = createShotProfile(this.shooter.x, this.shooter.y, spot.points);
-    if (profile === null) return;
+    if (profile === null) {
+      // Only reachable standing on the ring's exact axis, where no arc exists.
+      // Saying it is cheap; a button that does nothing is not.
+      this.hud.setHint('DESDE ACÁ NO SALE — CORRETE UN PASO');
+      return;
+    }
 
     this.profile = profile;
     this.lockedSpot = spot;
@@ -435,9 +462,24 @@ export class GameScene extends Phaser.Scene {
     return t < SHOT.chargeHalfPeriodMs ? t / SHOT.chargeHalfPeriodMs : 2 - t / SHOT.chargeHalfPeriodMs;
   }
 
-  private release(): void {
+  /**
+   * Drops a charge in progress without shooting. Pausing mid-charge used to eat
+   * the release — the phase stayed 'charging' and the bar went on sweeping by
+   * itself after unpausing, with the button already let go.
+   */
+  private cancelCharge(): void {
+    if (this.phase !== 'charging') return;
+    this.phase = 'positioning';
+    this.profile = null;
+    this.lockedSpot = null;
+    this.chargeElapsed = 0;
+    this.hud.hideBar();
+    this.view.setFriend(this.friendIndex, { pose: 'hold' });
+  }
+
+  private release(by: 'human' | 'machine' = 'human'): void {
     if (this.paused || this.phase !== 'charging') return;
-    if (this.cpuIsPlaying()) return;
+    if (by === 'human' && this.cpuIsPlaying()) return;
     const profile = this.profile;
     const spot = this.lockedSpot;
     if (profile === null || spot === null) return;
@@ -493,13 +535,17 @@ export class GameScene extends Phaser.Scene {
 
     if (match.finished) {
       this.phase = 'over';
-      this.scene.start('Result', { result: match.result(), config: match.config });
+      this.scene.start('Result', { result: match.result(), config: match.config, humanTeam: this.humanTeam });
       return;
     }
+    const lost = this.phase === 'charging';
+    this.cancelCharge();
     this.phase = 'turnBreak';
     this.breakFor = 1800;
     soundBoard.board();
-    this.hud.setHint('SE TERMINÓ EL MINUTO — CAMBIO DE PAREJA');
+    this.hud.setHint(
+      lost ? 'SONÓ LA CHICHARRA CON EL TIRO CARGADO — NO CUENTA' : 'SE TERMINÓ EL MINUTO — CAMBIO DE PAREJA',
+    );
   }
 
   /**
@@ -579,6 +625,9 @@ export class GameScene extends Phaser.Scene {
 
   private openPause(): void {
     this.paused = true;
+    // A charge cannot survive a pause: the release that arrives while paused is
+    // dropped, and the bar would go on sweeping by itself afterwards.
+    this.cancelCharge();
     const background = panel(this, 0, 0, 560, 400);
     const title = heading(this, 0, -150, 'PAUSA');
     const resume = makeButton(this, 0, -60, 'SEGUIR JUGANDO', () => this.closePause(), { accent: true });
@@ -701,15 +750,21 @@ export class GameScene extends Phaser.Scene {
     this.view.setBall(this.ballRest.x, this.ballRest.y, this.ballRest.z);
     this.view.highlightSpot(null);
 
-    if (this.feedbackFor > 0) {
-      this.feedbackFor -= delta;
-      this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y });
-      return;
-    }
+    // The celebration holds the pose, not the player. Freezing the shooter for
+    // half a second after every shot ate about a tenth of the minute with the
+    // clock running, which is a lot of a game whose whole rule is "go get it
+    // fast so you do not lose time".
+    const celebrating = this.feedbackFor > 0;
+    if (celebrating) this.feedbackFor -= delta;
 
     this.movePlayer(delta);
-    const pose = this.walking ? CourtView.walkFrame(this.timer) : 'idle0';
-    this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose });
+    const pose = celebrating ? undefined : this.walking ? CourtView.walkFrame(this.timer) : 'idle0';
+    this.view.setFriend(
+      this.friendIndex,
+      pose === undefined
+        ? { x: this.shooter.x, y: this.shooter.y }
+        : { x: this.shooter.x, y: this.shooter.y, pose },
+    );
 
     const distance = Math.hypot(this.shooter.x - this.ballRest.x, this.shooter.y - this.ballRest.y);
     this.hud.setHint(`Tocá la pelota para ir a buscarla — ${distance.toFixed(1)} m (el reloj corre)`);

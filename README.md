@@ -63,10 +63,11 @@ Elegís si sos **Bocha y Farico** o **Agus y Facu**, y la otra pareja la juega l
 computadora con las mismas reglas y sin ventajas. También están el modo de pasarse
 el aparato entre los dos y la práctica libre. Ver [`docs/MAQUINA.md`](docs/MAQUINA.md).
 
-Soltá cuando la aguja esté dentro de la franja verde. **Si soltás adentro, entra.**
-La franja es el intervalo de acierto real de la física, no una aproximación, y se
-angosta a medida que sube el número de la marca: 161 ms en la de 2, 62 ms en la
-de 8.
+Soltá cuando la aguja esté dentro de la franja verde. **Si soltás adentro entra, y
+si soltás afuera no entra.** La franja es el intervalo de acierto real de la
+física, medido tiro por tiro, y se angosta a medida que sube el número de la
+marca: 161 ms en la de 2, 62 ms en la de 8. La aguja se pone verde cuando está
+adentro, así soltar es reaccionar a un color y no apuntar a una línea.
 
 La marca de 2 está pintada casi debajo del aro, así que se juega como bandeja: el
 jugador se estira por encima del aro y la mete. Es el tiro más fácil y vale lo

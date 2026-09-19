@@ -110,9 +110,18 @@ console.log('antes del toque :', JSON.stringify(before));
 console.log('tras tocar cancha:', JSON.stringify(afterTap));
 console.log('tras ESPACIO    :', JSON.stringify(afterSpace));
 console.log('tras TIRAR      :', JSON.stringify(afterButton));
-const interfered =
-  afterTap.phase !== 'retrieving' || afterSpace.phase !== 'retrieving' || afterButton.phase !== 'retrieving';
-console.log(interfered ? 'FALLA: el humano pudo interferir' : 'OK: el humano no puede interferir');
+// Not "the phase never changed": the machine keeps playing while we poke at it,
+// so the phase moves on its own. What must never happen is a charge, which only
+// a person can start, or the walk target jumping to where the finger landed.
+const charged = [afterTap, afterSpace, afterButton].some((s) => s.phase === 'charging');
+const wentToTheTap =
+  afterTap.target !== null && Math.hypot(afterTap.target.x - 7.6, afterTap.target.y - 3.05) < 0.5;
+const interfered = charged || wentToTheTap;
+console.log(
+  interfered
+    ? `FALLA: el humano pudo interferir (carga=${charged} caminata=${wentToTheTap})`
+    : 'OK: el humano no puede interferir',
+);
 
 await page.screenshot({ path: 'screenshots/maquina-turno.png' });
 await browser.close();

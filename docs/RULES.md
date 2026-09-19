@@ -31,8 +31,9 @@ tiempo. Entonces la barra no es una escala fija de velocidad: para cada intento 
 estira el mapeo carga → velocidad de forma que **el intervalo real de acierto caiga
 exactamente sobre la franja verde dibujada**.
 
-Resultado: si soltás dentro de la franja, entra. Siempre. Y la franja se angosta con
-el número de la marca, que es lo que pediste:
+Resultado: si soltás dentro de la franja entra, siempre; y si soltás afuera no
+entra, nunca. Y la franja se angosta con el número de la marca, que es lo que
+pediste:
 
 | Marca | Ancho de la franja | Tiempo real para soltar |
 |---|---|---|
@@ -48,6 +49,27 @@ Notá que la 3 y la 4 están a la misma distancia del aro, y la 6 y la 7 tambié
 La dificultad está atada al **número**, no a la distancia, justamente porque eso
 fue lo que pediste.
 
+### La otra mitad de la promesa: afuera no entra
+
+Durante un tiempo la franja era verdad sólo hacia adentro. Un tiro pasado de
+fuerza pega en el tablero y entra igual, y como la barra estira el intervalo de
+acierto sobre una porción fija de sí misma, esos tiros de tablero volvían a caer
+sobre la barra en un lugar que nadie dibujó. En cinco de las siete marcas había
+una segunda ventana invisible; en la de 5 era **más ancha que la franja pintada y
+llegaba justo al tope**, o sea que mantener el botón hasta arriba eran 5 puntos
+garantizados. La de 2, además, tenía el intervalo recortado por el límite de
+búsqueda: la franja decía 17 % de la barra y la realidad era 59 %.
+
+Ahora el solver busca el intervalo de verdad y además busca la primera isla de
+tablero, y el mapeo de los extremos de la barra frena antes de llegar. El test
+`tests/ball.test.ts` barre la barra entera, marca por marca, y falla si algo
+entra fuera de la franja.
+
+Efecto de costado: **una pelota que picó en el pasto ya no puede entrar.** Es una
+regla nueva y hay que decirla. Está por dos motivos: en un patio es lo que pasa,
+y le permite al solver cortar el tiro apenas toca el suelo — sin eso, medir una
+marca tardaba tanto que se trababa el cuadro justo cuando apretás.
+
 ---
 
 ## 2. Interpretado (no lo dijiste, pero hacía falta para poder jugar)
@@ -58,6 +80,12 @@ Está marcado así en el código y es configuración, no una afirmación.
    computadora, o pasarse el aparato entre los dos. No dijiste cuál de las dos
    formas era la del patio, así que están las dos y elegís en el menú. Ver
    [MAQUINA.md](MAQUINA.md).
+
+0.5 **No se puede tirar dos veces seguidas de la misma marca.** Al completar la
+   vuelta de las siete, la vuelta se reinicia; sin esta regla podías dejar la de
+   8 para el final, la vuelta se reiniciaba abajo tuyo y tirabas otra vez sin
+   moverte. Ahora la marca recién tirada no puede abrir la vuelta siguiente. Es
+   por turno: la pareja que entra después no hereda ningún bloqueo.
 
 1. **Cómo se alternan los dos de la pareja.** Dentro del minuto, los dos integrantes
    se van turnando la pelota: uno tira, después el otro. Si en realidad tiraba

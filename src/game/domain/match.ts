@@ -111,6 +111,10 @@ export class Match {
   readonly config: MatchConfig;
 
   private readonly log: Attempt[] = [];
+  /** Laps really completed, per pair, accumulated across turns. */
+  private readonly lapsByTeam: [number, number] = [0, 0];
+  /** The last mark shot this turn, which may not open the next lap. */
+  private lastSpotId: SpotId | null = null;
   private readonly scores: [number, number] = [0, 0];
   private phaseValue: MatchPhase = 'idle';
   private roundValue = 0;
@@ -181,6 +185,11 @@ export class Match {
   }
 
   /** Marks still owed before the lap is complete. */
+  /** The mark just shot, which cannot open the next lap. */
+  get blockedSpot(): SpotId | null {
+    return this.lapAttempted.size === 0 ? this.lastSpotId : null;
+  }
+
   get lapRemaining(): readonly SpotId[] {
     return SHOT_SPOTS.filter((s) => !this.lapAttempted.has(s.id)).map((s) => s.id);
   }
@@ -192,6 +201,10 @@ export class Match {
   /** Starts the next pair's turn. */
   startTurn(): void {
     if (this.phaseValue === 'finished') throw new Error('the match is already finished');
+    // Calling it twice used to hand the minute back AND pass the turn to the
+    // other pair, silently. The scene is careful not to, but the rule belongs
+    // here and not in whoever happens to call it.
+    if (this.phaseValue === 'turn') throw new Error('the turn is still being played');
     const next = this.queue.shift();
     if (next === undefined) throw new Error('no turn is pending');
     this.teamIndex = next;
@@ -199,6 +212,9 @@ export class Match {
     this.timeLeftMs = this.roundValue === 0 ? this.config.turnMs : this.config.tiebreakMs;
     this.lapAttempted = new Set();
     this.lapsThisTurn = 0;
+    // Per turn, not per match: the rule is that you cannot shoot the same mark
+    // twice in a row, and the pair that comes next never shot at all.
+    this.lastSpotId = null;
     this.pending = null;
     this.phaseValue = 'turn';
   }
@@ -210,7 +226,10 @@ export class Match {
    */
   tick(deltaMs: number): void {
     if (this.phaseValue !== 'turn') return;
-    this.timeLeftMs = Math.max(0, this.timeLeftMs - Math.max(0, deltaMs));
+    // A non-finite delta would poison the clock: NaN survives Math.max, and then
+    // `NaN <= 0` is false, so the minute would never end.
+    const step = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    this.timeLeftMs = Math.max(0, this.timeLeftMs - step);
   }
 
   get timeUp(): boolean {
@@ -225,6 +244,11 @@ export class Match {
     if (this.phaseValue !== 'turn') return false;
     if (this.pending !== null) return false;
     if (this.timeLeftMs <= 0) return false;
+    // The mark that closed the last lap cannot open the next one. Otherwise you
+    // leave the 8 for last, the lap resets under your feet and you shoot it
+    // again without moving, which is the opposite of "hay que tirar de todos
+    // lados".
+    if (this.lapAttempted.size === 0 && this.lastSpotId === spotId) return false;
     return !this.lapAttempted.has(spotId);
   }
 
@@ -261,9 +285,11 @@ export class Match {
     this.log.push(attempt);
     this.scores[shot.teamIndex] = (this.scores[shot.teamIndex] ?? 0) + attempt.scored;
 
+    this.lastSpotId = shot.spotId;
     this.lapAttempted.add(shot.spotId);
     if (this.lapAttempted.size === SHOT_SPOTS.length) {
       this.lapsThisTurn += 1;
+      this.lapsByTeam[shot.teamIndex] = (this.lapsByTeam[shot.teamIndex] ?? 0) + 1;
       this.lapAttempted = new Set();
     }
     // The two members of the pair alternate on the ball.
@@ -278,7 +304,10 @@ export class Match {
   /** Closes the current turn and moves on, or ends the match. */
   endTurn(): void {
     if (this.phaseValue !== 'turn') return;
-    this.pending = null;
+    // A shot in the air still counts, so the turn may not end under one. The
+    // scene guards this through `timeUp`; saying it here too means a future
+    // caller cannot quietly drop an attempt that was already begun.
+    if (this.pending !== null) throw new Error('a shot is still in the air');
     if (this.queue.length > 0) {
       this.phaseValue = 'betweenTurns';
       return;
@@ -303,7 +332,10 @@ export class Match {
   standings(): TeamStanding[] {
     const rows = this.config.teams.map((team, teamIndex) => {
       const played = this.log.filter((a) => a.teamIndex === teamIndex);
-      const laps = Math.floor(played.length / SHOT_SPOTS.length);
+      // Laps really closed, not attempts divided by seven: a pair can shoot ten
+      // times without ever covering the seven marks, and attempts from different
+      // turns never chain into a lap because the lap resets every turn.
+      const laps = this.lapsByTeam[teamIndex] ?? 0;
       return {
         teamIndex,
         name: team.name,
