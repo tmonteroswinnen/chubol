@@ -91,8 +91,17 @@ self.addEventListener('fetch', (event) => {
 export function chubolAssets(): Plugin {
   let rootDir = process.cwd();
 
+  /**
+   * What the game may assume is there.
+   *
+   * A build for the internet leaves `references/` out, so the manifest has to
+   * leave it out too: otherwise the comparison screen reads "available" off the
+   * files sitting on this disk, asks for an image that was never published, and
+   * gets a 404 instead of the notice that says the reference is missing.
+   */
   const listing = (): { available: string[] } => {
-    const fromPublic = walk(resolve(rootDir, 'public')).map((p) => p);
+    const fromPublic = walk(resolve(rootDir, 'public'));
+    if (process.env['CHUBOL_PUBLIC'] === '1') return { available: fromPublic };
     const fromReferences = walk(resolve(rootDir, 'references')).map((p) => posix.join('references', p));
     return { available: [...fromPublic, ...fromReferences] };
   };
@@ -136,6 +145,18 @@ export function chubolAssets(): Plugin {
       server.watcher.add([resolve(rootDir, 'references'), resolve(rootDir, 'public')]);
     },
     closeBundle() {
+      /*
+       * The reference images are the author's own source material — the original
+       * illustration, the sketch, and a photo of the real dog — and they come to
+       * 7 MB, more than the rest of the site put together. They are an input to
+       * the work, not part of the game, so a build meant to be put on the
+       * internet leaves them out. The comparison screen then says the reference
+       * is missing, which is exactly what it is there to say.
+       *
+       * CHUBOL_PUBLIC=1 pnpm build   (or: pnpm build:publicar)
+       */
+      if (process.env['CHUBOL_PUBLIC'] === '1') return;
+
       // Nothing to do when there are no reference images yet.
       const src = resolve(rootDir, 'references');
       if (!existsSync(src)) return;

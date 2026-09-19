@@ -22,7 +22,9 @@
     "capture:ui": "node scripts/uiShots.mjs",
     "capture:hud": "node scripts/hudShot.mjs",
     "test:robusto": "node scripts/robustCheck.mjs",
-    "test:maquina": "node scripts/cpuCheck.mjs"
+    "test:maquina": "node scripts/cpuCheck.mjs",
+    "build:publicar": "tsc --noEmit && node scripts/buildPublic.mjs",
+    "test:subruta": "node scripts/subpathCheck.mjs"
   },
   "dependencies": {
     "phaser": "4.2.1"
