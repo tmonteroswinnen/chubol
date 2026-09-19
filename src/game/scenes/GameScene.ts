@@ -406,6 +406,9 @@ export class GameScene extends Phaser.Scene {
 
   private startCharge(): void {
     if (this.paused || this.phase !== 'positioning') return;
+    // The button is disabled during the machine's minute, but a finger already
+    // resting on it when the turn changes hands would otherwise get through.
+    if (this.cpuIsPlaying()) return;
     const spot = this.currentSpot();
     if (spot === null || !this.canShootHere(spot)) return;
     const profile = createShotProfile(this.shooter.x, this.shooter.y, spot.points);
@@ -427,6 +430,7 @@ export class GameScene extends Phaser.Scene {
 
   private release(): void {
     if (this.paused || this.phase !== 'charging') return;
+    if (this.cpuIsPlaying()) return;
     const profile = this.profile;
     const spot = this.lockedSpot;
     if (profile === null || spot === null) return;

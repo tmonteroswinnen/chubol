@@ -166,9 +166,19 @@ export interface HoldButton {
 /**
  * A round button that reports being pressed and released, for charging a shot.
  *
- * It has to release on `pointerupoutside` as well: on a phone a thumb very often
- * slides off the button before lifting, and losing that event would leave the
- * charge bar running forever with no way to shoot.
+ * Three things here exist because of how a phone actually gets held, and each
+ * one was a bug before it was a comment:
+ *
+ * - Only the finger that pressed can let go. The release also has to be caught
+ *   at the scene, because a thumb very often slides off the button before
+ *   lifting and the button itself would never hear about it — but without
+ *   checking which pointer it is, any other finger touching anywhere on the
+ *   screen fires the shot.
+ * - `POINTER_UP_OUTSIDE` has to be caught too. Phaser emits one or the other,
+ *   never both, so a finger lifted past the edge of the canvas would leave the
+ *   charge running with no way to shoot.
+ * - A thumb already resting on the button when it lights up counts as a press.
+ *   Otherwise you hold the button, walk onto the mark, and nothing happens.
  */
 export function makeHoldButton(
   scene: Phaser.Scene,
@@ -197,6 +207,10 @@ export function makeHoldButton(
 
   let enabled = true;
   let held = false;
+  /** The pointer holding the button, so no other finger can let go for it. */
+  let heldBy: number | null = null;
+  /** A finger resting on the button while it was off, to honour when it lights up. */
+  let waiting: Phaser.Input.Pointer | null = null;
 
   const paint = () => {
     ring.setStrokeStyle(5, enabled ? 0xf5a81c : 0x6f6244);
@@ -206,32 +220,52 @@ export function makeHoldButton(
   };
   paint();
 
-  const press = () => {
-    if (!enabled || held) return;
+  const press = (pointer?: Phaser.Input.Pointer) => {
+    if (!enabled) {
+      // Remember it: the button may light up while this finger is still down.
+      waiting = pointer ?? null;
+      return;
+    }
+    if (held) return;
     held = true;
+    heldBy = pointer?.id ?? null;
+    waiting = null;
     paint();
     onPress();
   };
-  const release = () => {
+
+  const release = (pointer?: Phaser.Input.Pointer) => {
+    if (waiting !== null && (pointer === undefined || pointer.id === waiting.id)) waiting = null;
     if (!held) return;
+    // A different finger lifting somewhere else is not this button being let go.
+    if (heldBy !== null && pointer !== undefined && pointer.id !== heldBy) return;
     held = false;
+    heldBy = null;
     paint();
     onRelease();
   };
 
   container.on('pointerdown', press);
   container.on('pointerup', release);
-  container.on('pointerupoutside', release);
-  // A finger dragged off the button still has to be able to let go of the shot.
   scene.input.on(Phaser.Input.Events.POINTER_UP, release);
+  scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, release);
 
   return {
     container,
     setEnabled(value: boolean) {
       if (enabled === value) return;
       enabled = value;
-      if (!value) release();
+      if (!value) {
+        release();
+        waiting = null;
+      }
       paint();
+      // The thumb that was already pressing gets what it asked for.
+      if (value && waiting !== null && waiting.isDown) {
+        const pointer = waiting;
+        waiting = null;
+        press(pointer);
+      }
     },
     setLabel(value: string) {
       text.setText(value);
@@ -241,6 +275,7 @@ export function makeHoldButton(
     },
     destroy() {
       scene.input.off(Phaser.Input.Events.POINTER_UP, release);
+      scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, release);
       container.destroy(true);
     },
   };

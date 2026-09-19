@@ -16,9 +16,22 @@ const config: Phaser.Types.Core.GameConfig = {
     // letterboxes it on other screens: the artwork is never stretched, and the
     // hoop, the dog and the trophy are never cropped.
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // NO_CENTER on purpose: the page already centres the canvas with a CSS grid.
+    // With both doing it the two offsets add up and the canvas sits off to one
+    // side, which on a phone pushes the shoot button under the notch.
+    autoCenter: Phaser.Scale.NO_CENTER,
     width: LOGICAL_WIDTH,
     height: LOGICAL_HEIGHT,
+  },
+  input: {
+    /*
+     * Phaser tracks ONE touch pointer unless told otherwise, and a touch that
+     * finds no free pointer is dropped without emitting anything. A phone held
+     * sideways has both thumbs on the glass, so the left one ate the only
+     * pointer and the right one — the one pressing TIRAR — never existed. Three:
+     * one per thumb and one for the finger that ends up resting on the screen.
+     */
+    activePointers: 3,
   },
   scene: [BootScene, MenuScene, GameScene, ResultScene, CompareScene],
 };

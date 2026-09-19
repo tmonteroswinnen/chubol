@@ -16,7 +16,8 @@
     "capture": "node scripts/capture.mjs screenshots",
     "capture:mobile": "node scripts/captureMobile.mjs",
     "test:touch": "node scripts/touchFlow.mjs",
-    "test:pwa": "node scripts/pwaCheck.mjs"
+    "test:pwa": "node scripts/pwaCheck.mjs",
+    "test:tactil": "node scripts/touchMulti.mjs"
   },
   "dependencies": {
     "phaser": "4.2.1"

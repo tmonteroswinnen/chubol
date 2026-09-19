@@ -25,7 +25,14 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #14100d;
+        /*
+          Darker than the game's own background on purpose. The canvas is 3:2 and
+          a phone is much wider, so there are dead bands at the sides; when they
+          were the same colour as the margins of the game nobody could tell where
+          the game ended, and a thumb parked on a dead band feels like a thumb
+          parked on the game.
+        */
+        background: #000;
         overflow: hidden;
         overscroll-behavior: none;
         font-family: Consolas, "Courier New", monospace;
@@ -42,6 +49,15 @@
         height: 100dvh;
         display: grid;
         place-items: center;
+        /*
+          Keep the canvas clear of the notch and of the home indicator. Phaser
+          sizes itself to this box, so insetting it shrinks the canvas instead of
+          hiding part of it — which matters because the shoot button lives hard
+          against the right edge.
+        */
+        box-sizing: border-box;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+          env(safe-area-inset-left, 0px);
       }
       #game canvas {
         display: block;

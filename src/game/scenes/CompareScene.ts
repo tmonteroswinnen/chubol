@@ -44,6 +44,11 @@ export class CompareScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-H', () => this.setCleanCapture(!this.cleanCapture));
     this.input.keyboard?.on('keydown-ESC', () => this.scene.start('Menu'));
+    // Hiding the interface hides the way out with it, so a tap brings it back.
+    // Otherwise pressing H on a phone would be a one-way door.
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, () => {
+      if (this.cleanCapture) this.setCleanCapture(false);
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
   }
 
@@ -91,7 +96,17 @@ export class CompareScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(DEPTHS.hud);
 
-    this.chrome = [strip, title, hint];
+    // A way out that does not need a keyboard. Before this, opening the
+    // comparison on a phone meant killing the app: the only way back was ESC.
+    const back = makeButton(this, 96, LOGICAL_HEIGHT - 80, 'VOLVER', () => this.scene.start('Menu'), {
+      width: 150,
+      height: 72,
+      fontSize: 22,
+    });
+    back.container.setDepth(DEPTHS.hud + 40);
+    this.buttons.push(back);
+
+    this.chrome = [strip, title, hint, back.container];
 
     if (referenceMissing) {
       const background = panel(this, 0, 0, 900, 300);
