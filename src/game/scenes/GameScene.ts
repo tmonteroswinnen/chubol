@@ -24,7 +24,6 @@ import { CourtView, DEPTHS } from '../render/courtView';
 import { Hud } from '../render/hud';
 import { CHARACTER_KEYS } from '../render/textures';
 import {
-  developmentArtBadge,
   heading,
   makeButton,
   makeHoldButton,
@@ -33,7 +32,6 @@ import {
   type Button,
   type HoldButton,
 } from '../render/ui';
-import { usingDevelopmentArt } from '../assets/manifest';
 import type { GameSceneData } from './MenuScene';
 
 /**
@@ -147,10 +145,6 @@ export class GameScene extends Phaser.Scene {
     this.bindInput();
     this.buildTouchControls();
 
-    if (usingDevelopmentArt()) {
-      developmentArtBadge(this, ART_X + 200, 24).setDepth(DEPTHS.hud);
-    }
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
   }
 
@@ -175,15 +169,17 @@ export class GameScene extends Phaser.Scene {
     this.shootButton = makeHoldButton(
       this,
       Hud.RIGHT_COLUMN,
-      860,
-      168,
+      800,
+      180,
       'TIRAR',
       () => this.startCharge(),
       () => this.release(),
     );
     this.shootButton.container.setDepth(DEPTHS.hud + 5);
 
-    this.pauseButton = makeIconButton(this, Hud.RIGHT_COLUMN, 64, 84, 'II', () => this.togglePause());
+    // 116 logical is about 41 CSS pixels on the smallest phone this targets,
+    // which is the floor for something a thumb has to hit.
+    this.pauseButton = makeIconButton(this, Hud.RIGHT_COLUMN, 74, 116, 'II', () => this.togglePause());
     this.pauseButton.container.setDepth(DEPTHS.hud + 5);
 
     // A tap on the artwork itself walks. The buttons live in the margins, so
@@ -375,23 +371,34 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    if (this.match !== null) {
-      const team = this.match.currentTeam;
-      const extra = this.match.round > 0 ? ` · DESEMPATE ${this.match.round}` : '';
-      const who = this.cpuIsPlaying() ? 'JUEGA LA MÁQUINA' : 'TIRÁS VOS';
-      this.hud.setTurn([`${team.name.toUpperCase()}${extra}`, this.activeName, who].join('\n'));
+    const match = this.match;
+    if (match !== null) {
+      const machine = this.cpuIsPlaying();
+      const tiebreak = match.round > 0 ? `DESEMPATE ${match.round}${NEWLINE}` : '';
+      // Against the machine the useful word is who is playing; between two
+      // people it is which pair, because both of them are "you".
+      const status =
+        this.humanTeam === null
+          ? `${tiebreak}JUEGAN${NEWLINE}${match.currentTeam.name.toUpperCase()}`
+          : `${tiebreak}${machine ? 'JUEGA LA MÁQUINA' : 'TIRÁS VOS'}`;
+      this.hud.setTurn(this.activeName, status, machine ? 'machine' : 'you');
       this.hud.setScore(
-        this.match.config.teams
-          .map((t, i) => `${t.name}${i === this.humanTeam ? ' (vos)' : ''}: ${this.match!.scoreOf(i)}`)
-          .join('\n'),
+        match.config.teams.map((team, index) => ({
+          name: team.name.toUpperCase(),
+          score: match.scoreOf(index),
+          yours: index === this.humanTeam,
+        })),
       );
-      this.hud.setClock(this.match.timeLeft);
-      this.hud.setLapMarks(this.match.lapDone, 'YA TIRARON:');
+      this.hud.setClock(match.timeLeft);
+      this.hud.setLapMarks(match.lapDone, 'FALTAN');
     } else if (this.practice !== null) {
-      this.hud.setTurn(`PRÁCTICA — ACIERTOS ${this.practice.makes}/${this.practice.attempts.length}`);
-      this.hud.setScore(`PUNTOS: ${this.practice.total}   MARCAS: ${this.practice.spotsCleared.size}/7`);
+      this.hud.setTurn('PRÁCTICA', `${this.practice.makes} DE ${this.practice.attempts.length}`, 'neutral');
+      this.hud.setScore([
+        { name: 'PUNTOS', score: this.practice.total, yours: true },
+        { name: 'MARCAS', score: this.practice.spotsCleared.size, yours: false },
+      ]);
       this.hud.setClock(null);
-      this.hud.setLapMarks(this.practice.spotsCleared, 'EMBOCADAS:');
+      this.hud.setLapMarks(this.practice.spotsCleared, 'HECHAS');
     }
   }
 

@@ -139,13 +139,16 @@ export function body(
  *
  * It names what is provisional instead of saying "development art", because the
  * court itself is the supplied illustration and calling the whole screen a
- * stand-in would understate how much of it is the real thing.
+ * stand-in would understate how much of it is the real thing. It belongs on the
+ * menu and not over the match: at a size anyone can actually read it covers a
+ * good part of the court, and during a minute against the clock nobody is going
+ * to stop and read a disclaimer anyway.
  */
 export function developmentArtBadge(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
   const text = scene.add
-    .text(0, 0, 'LA CANCHA ES LA LÁMINA · JUGADORES Y PELOTA, DIBUJADOS EN CÓDIGO', {
+    .text(0, 0, 'JUGADORES Y PELOTA: DIBUJO PROVISORIO', {
       fontFamily: UI_FONT,
-      fontSize: '16px',
+      fontSize: '26px',
       color: '#12180e',
     })
     .setOrigin(0.5);
@@ -193,7 +196,7 @@ export function makeHoldButton(
   const ring = scene.add.circle(0, 0, radius, 0x1b2416, 0.92).setStrokeStyle(5, 0xf5a81c);
   const inner = scene.add.circle(0, 0, radius - 12, 0x2c3a22, 0.9);
   const text = scene.add
-    .text(0, 0, label, { fontFamily: UI_FONT, fontSize: '26px', color: PALETTE.hudText, align: 'center' })
+    .text(0, 0, label, { fontFamily: UI_FONT, fontSize: '34px', color: PALETTE.hudText, align: 'center', lineSpacing: 4 })
     .setOrigin(0.5);
 
   const container = scene.add.container(x, y, [ring, inner, text]);

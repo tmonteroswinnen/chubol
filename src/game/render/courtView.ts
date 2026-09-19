@@ -146,7 +146,7 @@ export class CourtView {
       this.scene.add
         .text(0, 0, '', {
           fontFamily: UI_FONT,
-          fontSize: '26px',
+          fontSize: '34px',
           color: PALETTE.hudText,
           stroke: '#141008',
           strokeThickness: 6,
