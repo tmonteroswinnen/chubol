@@ -25,8 +25,12 @@ export interface Button {
 }
 
 /**
- * A button that works with pointer and keyboard, shows a visible focus ring and
- * never relies on colour alone to say what is selected.
+ * A rectangular button.
+ *
+ * It highlights on hover and marks the accented one with a coloured border, so
+ * what is selected never depends on colour alone. It is driven by pointer and
+ * touch only: there is no keyboard focus ring, and the comment here used to
+ * claim there was.
  */
 export function makeButton(
   scene: Phaser.Scene,

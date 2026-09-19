@@ -3,6 +3,10 @@
 Elegís si sos **Bocha y Farico** o **Agus y Facu**; la otra pareja la juega la
 computadora. Está en el menú, en *JUGAR CONTRA LA MÁQUINA*.
 
+**Vos tirás primero.** Elijas la pareja que elijas, tu minuto es el primero: que
+el primer minuto de tu primera partida sea mirar jugar a otro es una mala forma
+de entrar, y el partido es demasiado corto como para que eso no importe.
+
 ## No hace trampa
 
 La máquina no toca el estado del partido: emite los mismos tres comandos que

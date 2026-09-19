@@ -41,6 +41,8 @@ export interface MatchConfig {
   readonly tiebreak: TiebreakRule;
   /** Extra rounds to play before accepting a shared result. */
   readonly maxTiebreakRounds: number;
+  /** Which pair shoots first. Defaults to the first one. */
+  readonly startingTeam?: number;
 }
 
 export interface Attempt {
@@ -121,7 +123,7 @@ export class Match {
   private teamIndex = 0;
   private memberIndex = 0;
   /** Which teams still have a turn to play in this round. */
-  private queue: number[] = [0, 1];
+  private queue: number[];
   private timeLeftMs = 0;
   private lapAttempted = new Set<SpotId>();
   private lapsThisTurn = 0;
@@ -129,6 +131,10 @@ export class Match {
   private pending: PendingShot | null = null;
 
   constructor(config: MatchConfig) {
+    // The pair that starts. Against the machine the person goes first: the whole
+    // first minute of your first game spent watching somebody else play is a bad
+    // way in, and the game is short enough that it matters.
+    this.queue = config.startingTeam === 1 ? [1, 0] : [0, 1];
     if (config.teams.length !== 2) throw new Error('CHUBOL is played by two pairs');
     if (config.turnMs <= 0) throw new Error('a turn must last longer than zero');
     this.config = config;
@@ -325,7 +331,7 @@ export class Match {
     }
     // PROVISIONAL: an equal extra turn each, until someone is ahead.
     this.roundValue += 1;
-    this.queue = [0, 1];
+    this.queue = this.config.startingTeam === 1 ? [1, 0] : [0, 1];
     this.phaseValue = 'betweenTurns';
   }
 

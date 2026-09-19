@@ -15,8 +15,8 @@ page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
 await page.goto('http://localhost:4173/', { waitUntil: 'load' });
 await page.waitForFunction(() => Boolean(window.__chubol?.game?.scene?.isActive('Menu')), null, { timeout: 30000 });
 
-// The human picks the second pair, so the machine's pair goes first and we can
-// watch a full machine turn from the opening whistle.
+// The person always shoots first now, so burn their minute and then watch the
+// machine play its own, whole.
 await page.evaluate(() => {
   const m = window.__chubol.game.scene;
   for (const s of m.getScenes(true)) if (s.scene.key !== 'Game') m.stop(s.scene.key);
@@ -30,6 +30,22 @@ await page.evaluate(() => {
   });
 });
 await page.waitForFunction(() => Boolean(window.__chubol?.game?.scene?.isActive('Game')), null, { timeout: 30000 });
+
+// Skip the person's minute without playing it.
+await page.waitForFunction(
+  () => window.__chubol.game.scene.getScene('Game').phase === 'positioning',
+  null,
+  { timeout: 30000 },
+);
+await page.evaluate(() => window.__chubol.game.scene.getScene('Game').match.tick(59_500));
+await page.waitForFunction(
+  () => {
+    const g = window.__chubol.game.scene.getScene('Game');
+    return g.match.currentTeamIndex === 0 && g.phase === 'positioning';
+  },
+  null,
+  { timeout: 30000 },
+);
 
 const probe = () =>
   page.evaluate(() => {

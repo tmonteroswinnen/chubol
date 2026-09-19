@@ -111,6 +111,17 @@ describe('CHUBOL match: pairs, one minute each', () => {
     expect(match.canShootFrom('p5')).toBe(true);
   });
 
+  it('lets the match say which pair shoots first', () => {
+    // Against the machine the person goes first: picking the second pair used to
+    // mean the first minute of your first game was spent watching.
+    const match = new Match(config({ startingTeam: 1 }));
+    match.startTurn();
+    expect(match.currentTeamIndex).toBe(1);
+    match.endTurn();
+    match.startTurn();
+    expect(match.currentTeamIndex).toBe(0);
+  });
+
   it('refuses to end a turn with a shot still in the air', () => {
     const match = new Match(config());
     match.startTurn();

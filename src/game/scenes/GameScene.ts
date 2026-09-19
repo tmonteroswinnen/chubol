@@ -105,13 +105,19 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
   private pauseButtons: Button[] = [];
-  private keys!: {
+  /**
+   * Starts empty rather than undefined. `bindInput` returns early when there is
+   * no keyboard plugin, and a non-null assertion here meant that on any device
+   * without one the first frame would throw instead of simply being played with
+   * a finger.
+   */
+  private keys: {
     up: Phaser.Input.Keyboard.Key[];
     down: Phaser.Input.Keyboard.Key[];
     left: Phaser.Input.Keyboard.Key[];
     right: Phaser.Input.Keyboard.Key[];
-    shoot: Phaser.Input.Keyboard.Key;
-  };
+    shoot: Phaser.Input.Keyboard.Key | null;
+  } = { up: [], down: [], left: [], right: [], shoot: null };
 
   constructor() {
     super('Game');
@@ -153,13 +159,16 @@ export class GameScene extends Phaser.Scene {
 
     if (this.sceneData.mode === 'challenge') {
       const base = defaultMatchConfig(this.sceneData.teams);
+      this.humanTeam = this.sceneData.humanTeam ?? null;
       this.match = new Match({
         ...base,
         turnMs: this.sceneData.turnMs ?? base.turnMs,
         tiebreakMs: this.sceneData.tiebreakMs ?? base.tiebreakMs,
+        // Against the machine you shoot first. Picking the second pair used to
+        // mean your first minute of CHUBOL was spent watching.
+        startingTeam: this.humanTeam ?? 0,
       });
       this.practice = null;
-      this.humanTeam = this.sceneData.humanTeam ?? null;
       // A fresh seed per match: the settings stay fixed so the rival is always
       // the same calibre, but it must not play the identical turn every time.
       this.cpu =
@@ -343,10 +352,10 @@ export class GameScene extends Phaser.Scene {
       soundBoard.unlock();
       soundBoard.toggleMuted();
     });
-    this.keys.shoot.on('down', () => {
+    this.keys.shoot?.on('down', () => {
       if (!this.cpuIsPlaying()) this.startCharge();
     });
-    this.keys.shoot.on('up', () => {
+    this.keys.shoot?.on('up', () => {
       if (!this.cpuIsPlaying()) this.release();
     });
   }

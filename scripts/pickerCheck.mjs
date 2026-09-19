@@ -46,12 +46,27 @@ const picker = await labels();
 console.log('SELECTOR:', picker.map((l) => l.text.split('\n')[0]).join(' | '));
 await page.screenshot({ path: 'screenshots/12-elegir-pareja.png' });
 
-// Choose "Agus y Facu": the machine should then be Bocha y Farico, and go first.
+// Choose "Agus y Facu": the machine is then Bocha y Farico. The person shoots
+// first, so their minute is skipped to get to the machine's.
 const agus = picker.find((l) => l.text.toUpperCase().includes('AGUS'));
 p = toScreen(agus.x, agus.y);
 await page.mouse.click(p.x, p.y);
 await page.waitForFunction(() => Boolean(window.__chubol?.game?.scene?.isActive('Game')), null, { timeout: 30000 });
-await page.waitForTimeout(1200);
+await page.waitForFunction(
+  () => window.__chubol.game.scene.getScene('Game').phase === 'positioning',
+  null,
+  { timeout: 30000 },
+);
+await page.evaluate(() => window.__chubol.game.scene.getScene('Game').match.tick(59_500));
+await page.waitForFunction(
+  () => {
+    const g = window.__chubol.game.scene.getScene('Game');
+    return g.match.currentTeamIndex !== g.humanTeam && g.phase === 'positioning';
+  },
+  null,
+  { timeout: 30000 },
+);
+await page.waitForTimeout(400);
 
 const setup = await page.evaluate(() => {
   const g = window.__chubol.game.scene.getScene('Game');
