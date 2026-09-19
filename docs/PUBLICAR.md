@@ -26,6 +26,10 @@ Los tengo que hacer vos porque son de tu cuenta de GitHub:
 2. **Decirle a Pages que use la receta.**
    `Settings` → `Pages` → `Build and deployment` → `Source`: **GitHub Actions**.
 
+   La receta lo intenta activar sola (`enablement: true`), así que si el push
+   llega antes que este paso igual sale bien. La primera vez no fue así y la
+   corrida falló: el push llegó un minuto antes de que el interruptor existiera.
+
 Listo. En `Actions` vas a ver el despliegue corriendo; tarda un par de minutos la
 primera vez.
 

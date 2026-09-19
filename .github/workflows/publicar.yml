@@ -45,7 +45,12 @@ jobs:
 
       - run: pnpm run build:publicar
 
+      # enablement: activa Pages desde acá si todavía no estaba activado. Sin
+      # esto, la primera corrida falla cuando el push llega antes de que alguien
+      # toque el interruptor en Settings, que es exactamente lo que pasó.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
