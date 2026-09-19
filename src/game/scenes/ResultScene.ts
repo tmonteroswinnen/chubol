@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, SCENERY, WAITING_SPOTS } from '../config/court';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH, SCENERY } from '../config/court';
 import type { MatchConfig, MatchResult } from '../domain/match';
 import { soundBoard } from '../render/audio';
 import { courtProjection } from '../render/context';
@@ -15,12 +15,25 @@ export interface ResultSceneData {
   readonly humanTeam?: number | null;
 }
 
+/**
+ * Where the four of them stand for the photo: spread across the front of the
+ * court, clear of the result panel and of the boy, the dog and the trophy table
+ * painted into the plate.
+ */
+const CELEBRATION_SPOTS = [
+  { x: 0.9, y: -2.2 },
+  { x: 2.4, y: -2.55 },
+  { x: 5.9, y: -2.55 },
+  { x: 7.4, y: -2.2 },
+] as const;
+
 export class ResultScene extends Phaser.Scene {
   private view!: CourtView;
   private sceneData!: ResultSceneData;
   private buttons: Button[] = [];
   private timer = 0;
   private halo: Phaser.GameObjects.Ellipse | null = null;
+  private readonly happy: boolean[] = [];
 
   constructor() {
     super('Result');
@@ -34,17 +47,18 @@ export class ResultScene extends Phaser.Scene {
     this.view = new CourtView(this, courtProjection());
     this.view.setMarkersVisible(false);
 
-    // Only the pair that won celebrates. Everyone cheering, losers included,
-    // read as a bug rather than as a party.
+    // Lined up across the front of the court, not on the waiting spots: those
+    // are close enough together that four sets of raised arms overlap into one
+    // shape, and half of them ended up behind the result panel.
     const winning = new Set((this.sceneData.result?.winners ?? []).map((w) => w.teamIndex));
     const shared = this.sceneData.result?.shared === true;
-    WAITING_SPOTS.forEach((spot, index) => {
+    CELEBRATION_SPOTS.forEach((spot, index) => {
       const theirTeam = Math.floor(index / 2);
-      const happy = shared || winning.size === 0 || winning.has(theirTeam);
+      this.happy.push(shared || winning.size === 0 || winning.has(theirTeam));
       this.view.setFriend(index, {
         x: spot.x,
         y: spot.y,
-        pose: happy ? 'cheer' : 'idle0',
+        pose: this.happy[index] === true ? 'cheer' : 'idle0',
         backView: false,
         visible: true,
       });
@@ -158,7 +172,7 @@ export class ResultScene extends Phaser.Scene {
     this.buttons = [rematch, home];
 
     this.add
-      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 70, [
         background,
         titleText,
         table,
@@ -171,6 +185,13 @@ export class ResultScene extends Phaser.Scene {
 
   override update(_time: number, delta: number): void {
     this.timer += delta;
+    // Offset per friend, so they do not all throw their arms up on the same
+    // frame like a row of puppets on one string.
+    this.happy.forEach((happy, index) => {
+      if (!happy) return;
+      const beat = Math.floor((this.timer + index * 170) / 320) % 2 === 0;
+      this.view.setFriend(index, { pose: beat ? 'cheer' : 'idle1' });
+    });
     this.view.update(delta);
   }
 }

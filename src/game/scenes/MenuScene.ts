@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, SHOT_SPOTS } from '../config/court';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../config/court';
 import { RULES_DEFAULTS } from '../config/gameplay';
 import { defaultTeams, type TeamConfig } from '../domain/match';
 import { missingAssets, usingDevelopmentArt } from '../assets/manifest';
@@ -75,8 +75,11 @@ export class MenuScene extends Phaser.Scene {
   private buildMenu(): void {
     const x = LOGICAL_WIDTH / 2;
     const top = 280;
-
-    panel(this, x, top + 130, 520, 400).setDepth(DEPTHS.hud).setAlpha(0.9);
+    // Six buttons 74 apart, plus room above and below. It used to be a fixed
+    // 400 tall and the last two buttons hung out the bottom of the panel.
+    const entries = 6;
+    const panelHeight = 74 * entries + 96;
+    panel(this, x, top + panelHeight / 2 - 54, 560, panelHeight).setDepth(DEPTHS.hud).setAlpha(0.95);
 
     const start = (mode: GameMode, humanTeam: number | null = null) => () => {
       soundBoard.unlock();
@@ -182,59 +185,52 @@ export class MenuScene extends Phaser.Scene {
 
   private showRules(): void {
     this.closeOverlay();
-    const width = 1120;
-    const height = 620;
+    const width = 1340;
+    const height = 908;
     const background = panel(this, 0, 0, width, height);
-    const title = heading(this, 0, -height / 2 + 44, 'REGLAS DE CHUBOL');
+    const title = heading(this, 0, -height / 2 + 52, 'REGLAS DE CHUBOL', 40);
 
-    const confirmed = body(
+    // One column, not two. At a size anyone can read on a phone, two columns of
+    // this text ran straight into each other; and the long version lives in
+    // docs/RULES.md, which is where it belongs.
+    const rules = body(
       this,
-      -width / 2 + 40,
-      -height / 2 + 92,
+      -width / 2 + 56,
+      -height / 2 + 110,
       [
         'CONFIRMADO',
-        '· Se juega de a dos: pareja contra pareja.',
-        `· Cada pareja tiene ${RULES_DEFAULTS.turnSeconds} segundos para sumar lo más que pueda.`,
-        '· Hay que tirar de TODOS los lugares: no puede quedar',
-        '  una marca sin tirar.',
-        '· Después va la otra pareja, su minuto.',
-        '· Gana la pareja que hizo más puntos.',
+        '· De a dos: pareja contra pareja, un aro, sin tapones.',
+        `· ${RULES_DEFAULTS.turnSeconds} segundos por pareja. Gana la que hizo más puntos.`,
+        '· Hay que tirar de las siete marcas antes de repetir una.',
         '· Dentro del minuto se turnan los dos de la pareja.',
-        '· Un solo aro. No se pueden hacer tapones.',
-        '· No hay regla de rebote: hay que ir a buscar la pelota',
-        '  rápido para no perder tiempo.',
+        '· Los rebotes no valen: hay que ir a buscar la pelota',
+        '  rápido, porque el reloj no para.',
         '· La licuadora y las frutas son el trofeo.',
-      ].join('\n'),
-      20,
+        '',
+        'LAS MARCAS: 2 · 3 · 4 · 5 · 6 · 7 · 8',
+        'Cuanto más alto el número, menos tiempo tenés para soltar:',
+        'de 161 ms en la de 2 a 62 ms en la de 8.',
+        'Si soltás dentro del verde entra; afuera, no.',
+        '',
+        'FALTA DEFINIR (no lo dijiste todavía)',
+        '· Qué pasa si las dos parejas empatan. Por ahora juegan',
+        `  rondas extra de ${RULES_DEFAULTS.tiebreakSeconds} s y después queda compartido.`,
+      ].join(String.fromCharCode(10)),
+      30,
     );
 
-    const values = body(
-      this,
-      width / 2 - 480,
-      -height / 2 + 92,
-      [
-        'LAS SIETE MARCAS',
-        ...SHOT_SPOTS.map((s) => `  ${s.points} — ${s.description}`),
-        '',
-        'Cuanto más alto el número, más difícil el tiro.',
-        '',
-        'PENDIENTE (todavía no lo definiste)',
-        '· Qué pasa si las dos parejas empatan.',
-        `  Por ahora: ronda extra de ${RULES_DEFAULTS.tiebreakSeconds} s cada una,`,
-        '  repitiendo hasta que una quede arriba.',
-      ].join('\n'),
-      19,
-    );
-
-    const close = makeButton(this, 0, height / 2 - 52, 'VOLVER', () => this.closeOverlay(), { width: 220, height: 50 });
+    const close = makeButton(this, 0, height / 2 - 62, 'VOLVER', () => this.closeOverlay(), {
+      width: 300,
+      height: 72,
+      fontSize: 30,
+    });
 
     this.overlay = this.add
       .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
         overlayScrim(this, LOGICAL_WIDTH, LOGICAL_HEIGHT),
         background,
         title,
-        confirmed,
-        values,
+        rules,
         close.container,
       ])
       .setDepth(DEPTHS.hud + 20);

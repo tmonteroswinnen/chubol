@@ -213,9 +213,17 @@ export const WALK_BOUNDS = {
 } as const;
 
 /** Where the three friends who are not shooting wait, clear of every mark. */
+/**
+ * Where the three friends who are not shooting stand and wait.
+ *
+ * At least 1.4 m apart: the closest pair used to be 1.17 m, and with arms out
+ * that is close enough that two of them merge into one shape. All of them are
+ * off the court itself — the 3-point mark sits at y = 2.66, so a spot any
+ * further back would have someone standing on a mark.
+ */
 export const WAITING_SPOTS: readonly { readonly x: number; readonly y: number }[] = [
-  { x: 6.3, y: 2.35 },
-  { x: 6.9, y: 1.35 },
-  { x: 6.4, y: -1.55 },
-  { x: 5.8, y: 0.55 },
+  { x: 5.9, y: 2.5 },
+  { x: 7.3, y: 1.7 },
+  { x: 6.2, y: -2.0 },
+  { x: 7.4, y: -0.7 },
 ];

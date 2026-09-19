@@ -5,6 +5,7 @@ import {
   ART_X,
   ART_Y,
   BALL,
+  HOOP,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
   SHOT_SPOTS,
@@ -20,7 +21,9 @@ import { nearestSpot, spotAt } from '../domain/spots';
 import { ShotSimulation, createShotProfile, launchFromProfile, warmShotProfiles, type ShotProfile } from '../sim/ball';
 import { soundBoard } from '../render/audio';
 import { courtProjection } from '../render/context';
+import { CHARGE_CYCLE } from '../render/characters';
 import { CourtView, DEPTHS } from '../render/courtView';
+import { PALETTE } from '../render/palette';
 import { Hud } from '../render/hud';
 import { CHARACTER_KEYS } from '../render/textures';
 import {
@@ -28,6 +31,7 @@ import {
   makeButton,
   makeHoldButton,
   makeIconButton,
+  overlayScrim,
   panel,
   type Button,
   type HoldButton,
@@ -42,7 +46,10 @@ import type { GameSceneData } from './MenuScene';
  *               this is the "ir a buscarla rápido para no perder tiempo" part.
  * turnBreak   — the minute is over, waiting to hand the ball to the other pair.
  */
-type Phase = 'positioning' | 'charging' | 'flight' | 'retrieving' | 'turnBreak' | 'over';
+type Phase = 'turnIntro' | 'positioning' | 'charging' | 'flight' | 'retrieving' | 'turnBreak' | 'over';
+
+/** How long the "your turn" card stays up before the minute starts. */
+const INTRO_MS = 2200;
 
 /** How close the shooter has to get to pick the ball up again, in metres. */
 const PICKUP_RADIUS = 0.75;
@@ -80,9 +87,15 @@ export class GameScene extends Phaser.Scene {
   private ballRest = { x: 0, y: 0, z: BALL.radius };
   private feedbackFor = 0;
   private breakFor = 0;
+  private introFor = 0;
+  private introCard: Phaser.GameObjects.Container | null = null;
+  /** How many full rounds of the seven marks free practice has cleared. */
+  private practiceRounds = 0;
 
   /** Where a tap told the shooter to walk to, if anywhere. */
   private walkTarget: { x: number; y: number } | null = null;
+  /** Which way the shooter faces: -1 left, 1 right. */
+  private facing = -1;
   /** The pair played by the machine, and which pair the person is playing. */
   private cpu: CpuPlayer | null = null;
   private humanTeam: number | null = null;
@@ -126,6 +139,8 @@ export class GameScene extends Phaser.Scene {
     this.lockedPoints = 0;
     this.feedbackFor = 0;
     this.breakFor = 0;
+    this.introFor = 0;
+    this.practiceRounds = 0;
     this.walking = false;
   }
 
@@ -160,6 +175,7 @@ export class GameScene extends Phaser.Scene {
     this.beginShotCycle(true);
     this.bindInput();
     this.buildTouchControls();
+    if (this.match !== null) this.startTurnIntro();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
   }
@@ -168,6 +184,8 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.removeAllListeners();
     this.input.removeAllListeners();
     this.closePause();
+    this.introCard?.destroy(true);
+    this.introCard = null;
     this.shootButton?.destroy();
     this.shootButton = null;
     this.pauseButton?.destroy();
@@ -293,7 +311,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.phase !== 'positioning') {
       button.setEnabled(false);
-      button.setLabel(this.phase === 'retrieving' ? ['BUSCÁ LA', 'PELOTA'].join('\n') : 'TIRAR');
+      if (this.phase === 'retrieving') button.setLabel(['BUSCÁ LA', 'PELOTA'].join(NEWLINE));
+      else if (this.phase === 'turnIntro') button.setLabel(['YA', 'EMPIEZA'].join(NEWLINE));
+      else if (this.phase === 'turnBreak' || this.phase === 'over') button.setLabel(['NO ES', 'TU TURNO'].join(NEWLINE));
+      else button.setLabel('TIRAR');
       return;
     }
     const spot = this.currentSpot();
@@ -367,8 +388,18 @@ export class GameScene extends Phaser.Scene {
       this.shooter.y = start.y;
     }
     this.placeWaitingFriends();
-    this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose: 'hold', visible: true });
+    this.view.setFriend(this.friendIndex, {
+      x: this.shooter.x,
+      y: this.shooter.y,
+      pose: 'hold',
+      visible: true,
+      facing: this.facing,
+    });
     this.view.setActiveFriend(this.friendIndex, this.shooterName());
+    // The sprite has to be laid out before the ball can be hung off its hand,
+    // and nothing else moves during the "your turn" card.
+    this.view.update(0);
+    this.view.setBallInHand(this.friendIndex);
     this.cpu?.reset();
     this.refreshHud();
   }
@@ -497,6 +528,7 @@ export class GameScene extends Phaser.Scene {
     this.simulation = new ShotSimulation(this.shotId, launch);
     this.phase = 'flight';
     this.hud.hideBar();
+    this.view.setTrail(true);
     this.view.setFriend(this.friendIndex, { pose: 'release' });
   }
 
@@ -524,7 +556,86 @@ export class GameScene extends Phaser.Scene {
     };
     this.feedbackFor = 520;
     this.phase = 'retrieving';
+    this.view.setTrail(false);
+
+    // Free practice had no ending at all: you could make all seven and nothing
+    // happened. Now it says so, and then lets you go round again.
+    if (this.practice !== null && this.practice.clearedAll) {
+      this.practiceRounds += 1;
+      this.practice.reset();
+      soundBoard.fanfare();
+      this.flashBanner(['LAS SIETE MARCAS', this.practiceRounds === 1 ? 'OTRA VUELTA' : `VUELTA ${this.practiceRounds + 1}`]);
+    }
+
+    // A made shot resolves the instant the ball crosses the ring, two metres up.
+    // Cutting straight to the grass threw the ball across the screen in one
+    // frame, at the exact moment the shot is supposed to feel good.
+    if (made && state !== undefined) {
+      this.view.shakeHoop(1);
+      this.view.dropBallTo(state.x, state.y, state.z, this.ballRest.x, this.ballRest.y, () => {
+        // Nothing to do: updateRetrieving takes the ball back from here.
+      });
+    }
     this.refreshHud();
+  }
+
+  /**
+   * Announces whose minute is about to start, and holds the clock while it does.
+   *
+   * Before this the minute simply began: the pairs changed over in silence and
+   * the first thing you knew about your turn was that you had already lost two
+   * seconds of it.
+   */
+  private startTurnIntro(): void {
+    const match = this.match;
+    if (match === null) {
+      this.phase = 'positioning';
+      return;
+    }
+    const machine = this.cpuIsPlaying();
+    const lines = [
+      match.round > 0 ? `DESEMPATE ${match.round}` : '',
+      match.currentTeam.name.toUpperCase(),
+      machine ? 'JUEGA LA MÁQUINA' : this.humanTeam === null ? 'PASENSÉ EL APARATO' : 'TE TOCA',
+    ].filter((line) => line !== '');
+
+    const background = panel(this, 0, 0, 900, 300);
+    const title = heading(this, 0, -48, lines.slice(0, -1).join(' · '), 40);
+    const who = heading(this, 0, 34, lines[lines.length - 1]!, 52);
+    who.setColor(machine ? PALETTE.hudBad : PALETTE.hudGood);
+    this.introCard = this.add
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 90, [background, title, who])
+      .setDepth(DEPTHS.hud + 30);
+
+    this.introFor = INTRO_MS;
+    this.phase = 'turnIntro';
+    this.hud.setHint('');
+    this.refreshHud();
+  }
+
+  /** A card in the middle of the screen that says something and gets out of the way. */
+  private flashBanner(lines: readonly string[]): void {
+    const background = panel(this, 0, 0, 760, 200);
+    const title = heading(this, 0, -32, lines[0] ?? '', 44);
+    const subtitle = heading(this, 0, 36, lines[1] ?? '', 34);
+    subtitle.setColor(PALETTE.hudGood);
+    const card = this.add
+      .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 120, [background, title, subtitle])
+      .setDepth(DEPTHS.hud + 30);
+    this.tweens.add({
+      targets: card,
+      alpha: 0,
+      delay: 1400,
+      duration: 500,
+      onComplete: () => card.destroy(true),
+    });
+  }
+
+  private endTurnIntro(): void {
+    this.introCard?.destroy(true);
+    this.introCard = null;
+    this.phase = 'positioning';
+    soundBoard.bounce();
   }
 
   /** Ends the pair's minute and hands over, or finishes the match. */
@@ -553,6 +664,18 @@ export class GameScene extends Phaser.Scene {
    * directly, and a tap on the court sets a point to walk to. Touching the keys
    * cancels a tapped destination, so the two never fight each other.
    */
+  /**
+   * Turns the shooter to face a direction, with a dead zone.
+   *
+   * Without one the friend spins on the spot every time they wobble across the
+   * line, and the line that matters — the hoop's axis at x = 0.94 — runs right
+   * between the 2-point mark and everything else.
+   */
+  private faceTowards(dx: number): void {
+    if (Math.abs(dx) < 0.35) return;
+    this.facing = dx > 0 ? 1 : -1;
+  }
+
   private movePlayer(deltaMs: number): void {
     const step = (MOVEMENT.speed * deltaMs) / 1000;
 
@@ -568,6 +691,7 @@ export class GameScene extends Phaser.Scene {
     if ((dx !== 0 || dy !== 0) && !this.cpuIsPlaying()) {
       this.walkTarget = null;
       this.walking = true;
+      this.faceTowards(dx);
       const length = Math.hypot(dx, dy);
       this.shooter.x = Phaser.Math.Clamp(this.shooter.x + (dx / length) * step, WALK_BOUNDS.minX, WALK_BOUNDS.maxX);
       this.shooter.y = Phaser.Math.Clamp(this.shooter.y + (dy / length) * step, WALK_BOUNDS.minY, WALK_BOUNDS.maxY);
@@ -591,6 +715,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.walking = true;
+    this.faceTowards(toX);
     this.shooter.x = Phaser.Math.Clamp(this.shooter.x + (toX / distance) * step, WALK_BOUNDS.minX, WALK_BOUNDS.maxX);
     this.shooter.y = Phaser.Math.Clamp(this.shooter.y + (toY / distance) * step, WALK_BOUNDS.minY, WALK_BOUNDS.maxY);
   }
@@ -603,7 +728,7 @@ export class GameScene extends Phaser.Scene {
     }
     const spot = this.currentSpot();
     const index = spot === null ? null : SHOT_SPOTS.findIndex((s) => s.id === spot.id);
-    this.view.highlightSpot(index);
+    this.view.highlightSpot(index, spot === null || this.canShootHere(spot));
 
     if (spot === null) {
       const near = nearestSpot(this.shooter.x, this.shooter.y);
@@ -628,29 +753,36 @@ export class GameScene extends Phaser.Scene {
     // A charge cannot survive a pause: the release that arrives while paused is
     // dropped, and the bar would go on sweeping by itself afterwards.
     this.cancelCharge();
-    const background = panel(this, 0, 0, 560, 400);
-    const title = heading(this, 0, -150, 'PAUSA');
-    const resume = makeButton(this, 0, -60, 'SEGUIR JUGANDO', () => this.closePause(), { accent: true });
-    const sound = makeButton(this, 0, 14, 'SONIDO ON/OFF', () => {
+    const background = panel(this, 0, 0, 620, 470);
+    const title = heading(this, 0, -178, 'PAUSA', 44);
+    // 96 apart and 76 tall: on the smallest phone that is 34 CSS pixels of gap
+    // between REINICIAR and the button above it, which used to be 10.
+    const item = { width: 470, height: 76, fontSize: 30 };
+    const resume = makeButton(this, 0, -76, 'SEGUIR JUGANDO', () => this.closePause(), { ...item, accent: true });
+    const sound = makeButton(this, 0, 20, 'SONIDO ON/OFF', () => {
       soundBoard.unlock();
       soundBoard.toggleMuted();
-    });
-    const restart = makeButton(this, 0, 88, 'REINICIAR', () => {
+    }, item);
+    const restart = makeButton(this, 0, 116, 'REINICIAR', () => {
       this.closePause();
       this.scene.restart(this.sceneData);
-    });
-    const quit = makeButton(this, 0, 162, 'VOLVER AL INICIO', () => {
+    }, item);
+    const quit = makeButton(this, 0, 212, 'VOLVER AL INICIO', () => {
       this.closePause();
       this.scene.start('Menu');
-    });
+    }, item);
     this.pauseButtons = [resume, sound, restart, quit];
     this.pauseOverlay = this.add
       .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [
+        // Dims the court and swallows taps, so the game behind the panel is
+        // plainly stopped and cannot be poked through it.
+        overlayScrim(this, LOGICAL_WIDTH, LOGICAL_HEIGHT),
         background,
         title,
         ...this.pauseButtons.map((b) => b.container),
       ])
       .setDepth(DEPTHS.hud + 40);
+    this.shootButton?.setEnabled(false);
   }
 
   private closePause(): void {
@@ -670,12 +802,12 @@ export class GameScene extends Phaser.Scene {
     this.timer += delta;
 
     // The minute runs through walking, charging and flight alike.
-    if (this.match !== null && this.phase !== 'turnBreak' && this.phase !== 'over') {
+    if (this.match !== null && this.phase !== 'turnBreak' && this.phase !== 'turnIntro' && this.phase !== 'over') {
       this.match.tick(delta);
       this.hud.setClock(this.match.timeLeft);
     }
 
-    if (this.cpuIsPlaying()) this.updateCpu(delta);
+    if (this.cpuIsPlaying() && this.phase !== 'turnIntro') this.updateCpu(delta);
 
     switch (this.phase) {
       case 'positioning':
@@ -690,12 +822,17 @@ export class GameScene extends Phaser.Scene {
       case 'retrieving':
         this.updateRetrieving(delta);
         break;
+      case 'turnIntro':
+        this.introFor -= delta;
+        if (this.introFor <= 0) this.endTurnIntro();
+        break;
       case 'turnBreak':
         this.breakFor -= delta;
         if (this.breakFor <= 0) {
           this.match?.startTurn();
           this.hud.setHint('');
-                this.beginShotCycle(true);
+          this.beginShotCycle(true);
+          this.startTurnIntro();
         }
         break;
       default:
@@ -713,25 +850,39 @@ export class GameScene extends Phaser.Scene {
   private updatePositioning(delta: number): void {
     this.movePlayer(delta);
     this.updateHints();
+    // Standing still, they look at the hoop; walking, they look where they go.
+    if (!this.walking) this.faceTowards(HOOP.groundX - this.shooter.x);
     const pose = this.walking ? CourtView.walkFrame(this.timer) : 'hold';
-    this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose });
-    this.view.setBall(this.shooter.x - 0.32, this.shooter.y - 0.05, 1.05);
-    if (this.walking && Math.floor(this.timer / 220) !== Math.floor((this.timer - delta) / 220)) soundBoard.step();
+    this.view.setFriend(this.friendIndex, { x: this.shooter.x, y: this.shooter.y, pose, facing: this.facing });
+    this.view.setBallInHand(this.friendIndex);
+    if (this.walking && Math.floor(this.timer / 220) !== Math.floor((this.timer - delta) / 220)) {
+      soundBoard.step();
+      this.view.puff(this.shooter.x, this.shooter.y);
+    }
   }
 
   private updateCharging(delta: number): void {
     this.chargeElapsed += delta;
+    // You shoot at the hoop, so you look at it.
+    this.faceTowards(HOOP.groundX - this.shooter.x);
     const charge = this.chargeValue();
     this.hud.setCharge(charge);
-    this.view.setFriend(this.friendIndex, { pose: charge > 0.45 ? 'wind' : 'hold' });
-    this.view.setBall(this.shooter.x - 0.28, this.shooter.y - 0.05, 1.35 + charge * 0.35);
+    // Four steps of winding up instead of two. The charge sweeps up and back
+    // down about twice a second, so a single threshold made the body snap
+    // between two frames four times a cycle.
+    const step = Math.min(CHARGE_CYCLE.length - 1, Math.floor(charge * CHARGE_CYCLE.length));
+    this.view.setFriend(this.friendIndex, { pose: CHARGE_CYCLE[step]!, facing: this.facing });
+    this.view.setBallInHand(this.friendIndex);
   }
 
   private updateFlight(delta: number): void {
     const simulation = this.simulation;
     if (simulation === null) return;
     for (const event of simulation.advance(delta / 1000)) {
-      if (event.kind === 'rim') soundBoard.rim();
+      if (event.kind === 'rim') {
+        soundBoard.rim();
+        this.view.shakeHoop(0.5);
+      }
       if (event.kind === 'board') soundBoard.board();
       if (event.kind === 'ground') soundBoard.bounce();
       if (event.kind === 'resolved') this.resolve(event.outcome === 'made');

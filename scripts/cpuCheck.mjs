@@ -75,5 +75,5 @@ console.log('marcas usadas:', [...new Set(machineShots.map((h) => h.points))].so
 console.log('embocados:', machineShots.filter((h) => h.made).length);
 console.log('puntos:', machineShots.filter((h) => h.made).reduce((a, h) => a + h.points, 0));
 
-await page.screenshot({ path: 'screenshots/maquina-jugando.png' });
+await page.screenshot({ path: 'screenshots/14-maquina-tirando.png' });
 await browser.close();

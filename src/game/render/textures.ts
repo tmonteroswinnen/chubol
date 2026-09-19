@@ -24,8 +24,14 @@ export const CHARACTER_KEYS: readonly CharacterKey[] = ['a', 'b', 'c', 'd'];
 
 /** Canonical drawn height of an adult, in logical pixels. Scaled down per depth. */
 export const CHARACTER_CANONICAL_HEIGHT = 300;
-/** Canonical drawn diameter of the ball, in logical pixels. */
-export const BALL_CANONICAL_DIAMETER = 44;
+/**
+ * Canonical drawn diameter of the ball, in logical pixels.
+ *
+ * Larger than the ball is ever drawn on screen (about 46 px at the near mark),
+ * so the seams stay crisp instead of going soft under the linear filter next to
+ * the sharp artwork of the plate.
+ */
+export const BALL_CANONICAL_DIAMETER = 96;
 export const BALL_SPINS = 6;
 
 export const ADULT_HEIGHT_METRES = 1.75;
@@ -33,6 +39,12 @@ export const ADULT_HEIGHT_METRES = 1.75;
 const MARGIN = 26;
 const CELL_WIDTH = Math.round(CHARACTER_CANONICAL_HEIGHT * 0.85) + MARGIN * 2;
 const CELL_HEIGHT = CHARACTER_CANONICAL_HEIGHT + MARGIN * 2;
+/**
+ * The atlas is a grid, not a strip. Thirteen poses in one row came to almost
+ * 4000 px wide, which is at the edge of what a phone GPU will accept as a single
+ * texture; a wider grid is the same pixels in a shape that always fits.
+ */
+const ATLAS_COLUMNS = 5;
 
 export const CHARACTER_ORIGIN_X = 0.5;
 export const CHARACTER_ORIGIN_Y = (CELL_HEIGHT - MARGIN) / CELL_HEIGHT;
@@ -52,12 +64,24 @@ export const ballTextureKey = (spinIndex: number): string => `ball-${spinIndex}`
 /** Scale to apply to a character sprite so it stands `logicalHeight` tall. */
 export const characterScale = (logicalHeight: number): number => logicalHeight / CHARACTER_CANONICAL_HEIGHT;
 
+const atlasRows = Math.ceil(POSES.length / ATLAS_COLUMNS);
+const cellAt = (index: number) => ({
+  x: (index % ATLAS_COLUMNS) * CELL_WIDTH,
+  y: Math.floor(index / ATLAS_COLUMNS) * CELL_HEIGHT,
+});
+
 function buildCharacterAtlas(character: CharacterKey, backView: boolean): PixelSurface {
-  const surface = createSurface(CELL_WIDTH * POSES.length, CELL_HEIGHT);
-  POSES.forEach((pose: PoseName, col) => {
-    const cx = col * CELL_WIDTH + CELL_WIDTH / 2;
-    const groundY = CELL_HEIGHT - MARGIN;
-    paintAdult(surface.ctx, cx, groundY, CHARACTER_CANONICAL_HEIGHT, { character, facingLeft: true, backView }, pose);
+  const surface = createSurface(CELL_WIDTH * ATLAS_COLUMNS, CELL_HEIGHT * atlasRows);
+  POSES.forEach((pose: PoseName, index) => {
+    const cell = cellAt(index);
+    paintAdult(
+      surface.ctx,
+      cell.x + CELL_WIDTH / 2,
+      cell.y + CELL_HEIGHT - MARGIN,
+      CHARACTER_CANONICAL_HEIGHT,
+      { character, backView },
+      pose,
+    );
   });
   return surface;
 }
@@ -65,8 +89,9 @@ function buildCharacterAtlas(character: CharacterKey, backView: boolean): PixelS
 function registerCharacterAtlas(scene: Phaser.Scene, key: string, surface: PixelSurface): void {
   registerTexture(scene, key, surface, Phaser.Textures.FilterMode.LINEAR);
   const texture = scene.textures.get(key);
-  POSES.forEach((pose, col) => {
-    texture.add(pose, 0, col * CELL_WIDTH, 0, CELL_WIDTH, CELL_HEIGHT);
+  POSES.forEach((pose, index) => {
+    const cell = cellAt(index);
+    texture.add(pose, 0, cell.x, cell.y, CELL_WIDTH, CELL_HEIGHT);
   });
 }
 

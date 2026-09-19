@@ -20,7 +20,7 @@ export type CpuCommand =
   | { readonly kind: 'wait' };
 
 export interface CpuView {
-  readonly phase: 'positioning' | 'charging' | 'flight' | 'retrieving' | 'turnBreak' | 'over';
+  readonly phase: 'turnIntro' | 'positioning' | 'charging' | 'flight' | 'retrieving' | 'turnBreak' | 'over';
   readonly shooterX: number;
   readonly shooterY: number;
   readonly ballX: number;
@@ -80,7 +80,12 @@ export class CpuPlayer {
   }
 
   decide(view: CpuView, deltaMs: number): CpuCommand {
-    if (view.phase === 'flight' || view.phase === 'turnBreak' || view.phase === 'over') {
+    if (
+      view.phase === 'flight' ||
+      view.phase === 'turnIntro' ||
+      view.phase === 'turnBreak' ||
+      view.phase === 'over'
+    ) {
       this.targetRelease = null;
       return { kind: 'wait' };
     }

@@ -29,7 +29,7 @@ const labels = () =>
   });
 
 console.log('MENU:', (await labels()).map((l) => l.text.split('\n')[0]).join(' | '));
-await page.screenshot({ path: 'screenshots/menu.png' });
+await page.screenshot({ path: 'screenshots/11-menu.png' });
 
 // Tap the first menu entry: playing against the machine.
 const jugar = (await labels()).find((l) => l.text.includes('MÁQUINA'));
@@ -44,7 +44,7 @@ await page.waitForTimeout(400);
 
 const picker = await labels();
 console.log('SELECTOR:', picker.map((l) => l.text.split('\n')[0]).join(' | '));
-await page.screenshot({ path: 'screenshots/selector-pareja.png' });
+await page.screenshot({ path: 'screenshots/12-elegir-pareja.png' });
 
 // Choose "Agus y Facu": the machine should then be Bocha y Farico, and go first.
 const agus = picker.find((l) => l.text.toUpperCase().includes('AGUS'));
@@ -123,5 +123,5 @@ console.log(
     : 'OK: el humano no puede interferir',
 );
 
-await page.screenshot({ path: 'screenshots/maquina-turno.png' });
+await page.screenshot({ path: 'screenshots/13-juega-la-maquina.png' });
 await browser.close();
