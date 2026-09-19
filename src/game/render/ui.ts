@@ -55,7 +55,12 @@ export function makeButton(
 
   const container = scene.add.container(x, y, [focusRing, background, text]);
   container.setSize(width, height);
-  container.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains);
+  // From 0 to the size, NOT from -size/2. Phaser adds the display origin to the
+  // local point before testing the hit area, so a rectangle written around zero
+  // ends up covering the area half a button up and to the left of the button:
+  // the bottom and the right of what you can see do nothing, and a patch of
+  // court beside it presses the button instead. See makeHoldButton.
+  container.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
 
   let enabled = true;
 
@@ -96,10 +101,10 @@ export function makeButton(
  */
 export function overlayScrim(scene: Phaser.Scene, width: number, height: number): Phaser.GameObjects.Rectangle {
   const scrim = scene.add.rectangle(0, 0, width, height, 0x0a0d06, 0.78);
-  scrim.setInteractive(
-    new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
-    Phaser.Geom.Rectangle.Contains,
-  );
+  // Same origin correction as the buttons: written around zero it only swallowed
+  // taps in the top-left quarter of the screen, so a finger went straight through
+  // an open panel and pressed whatever was behind it.
+  scrim.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
   return scrim;
 }
 
@@ -205,12 +210,18 @@ export function makeHoldButton(
 
   const container = scene.add.container(x, y, [ring, inner, text]);
   container.setSize(diameter, diameter);
-  // A square hit area, not a circle: it matches how the other buttons are wired,
-  // and a slightly generous target is the right call for a thumb.
-  container.setInteractive(
-    new Phaser.Geom.Rectangle(-radius, -radius, diameter, diameter),
-    Phaser.Geom.Rectangle.Contains,
-  );
+  /*
+   * A square hit area, not a circle: a slightly generous target is the right
+   * call for a thumb.
+   *
+   * It goes from 0 to the diameter, not from -radius to +radius. Phaser adds the
+   * display origin to the local point before testing, so the obvious spelling
+   * lands the area half a button up and to the left: the bottom and the right of
+   * the circle you can see do nothing at all, and the grass beside it fires the
+   * shot. The exact centre still works, which is why every automated tap passed
+   * while a thumb on the button did nothing — that is the bug that was reported.
+   */
+  container.setInteractive(new Phaser.Geom.Rectangle(0, 0, diameter, diameter), Phaser.Geom.Rectangle.Contains);
 
   let enabled = true;
   let held = false;
@@ -303,7 +314,7 @@ export function makeIconButton(
     .setOrigin(0.5);
   const container = scene.add.container(x, y, [background, text]);
   container.setSize(size, size);
-  container.setInteractive(new Phaser.Geom.Rectangle(-size / 2, -size / 2, size, size), Phaser.Geom.Rectangle.Contains);
+  container.setInteractive(new Phaser.Geom.Rectangle(0, 0, size, size), Phaser.Geom.Rectangle.Contains);
   container.on('pointerdown', onActivate);
   return {
     container,

@@ -78,37 +78,40 @@ export class MenuScene extends Phaser.Scene {
     // Six buttons 74 apart, plus room above and below. It used to be a fixed
     // 400 tall and the last two buttons hung out the bottom of the panel.
     const entries = 6;
-    const panelHeight = 74 * entries + 96;
-    panel(this, x, top + panelHeight / 2 - 54, 560, panelHeight).setDepth(DEPTHS.hud).setAlpha(0.95);
+    const panelHeight = 96 * entries + 110;
+    panel(this, x, top + panelHeight / 2 - 54, 560, panelHeight).setDepth(DEPTHS.hud);
 
     const start = (mode: GameMode, humanTeam: number | null = null) => () => {
       soundBoard.unlock();
       this.scene.start('Game', { mode, teams: defaultTeams(), humanTeam } satisfies GameSceneData);
     };
 
+    // 34 logical is 12 CSS pixels on the smallest phone: the same floor the HUD
+    // uses. The menu was still at the default 24, which lands at 8.4 there.
+    const item = { width: 520, height: 84, fontSize: 34 };
     const make = (dy: number, label: string, action: () => void, accent = false): Button => {
-      const button = makeButton(this, x, top + dy, label, action, { accent });
+      const button = makeButton(this, x, top + dy, label, action, { ...item, accent });
       button.container.setDepth(DEPTHS.hud + 1);
       this.buttons.push(button);
       return button;
     };
 
     this.add
-      .text(x, top - 36, `PARTIDO DE A DOS · ${RULES_DEFAULTS.turnSeconds} SEGUNDOS POR PAREJA`, {
+      .text(x, top - 86, `PARTIDO DE A DOS · ${RULES_DEFAULTS.turnSeconds} SEGUNDOS POR PAREJA`, {
         fontFamily: UI_FONT,
-        fontSize: '21px',
+        fontSize: '30px',
         color: PALETTE.hudAccent,
       })
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud + 1);
 
-    make(24, 'JUGAR CONTRA LA MÁQUINA', () => this.showPairPicker(), true);
-    make(98, 'LOS DOS EN ESTE APARATO', start('challenge', null));
-    make(172, 'PRÁCTICA LIBRE', start('practice'));
-    make(246, 'REGLAS', () => this.showRules());
-    make(320, 'COMPARACIÓN VISUAL', () => this.scene.start('Compare'));
+    make(30, 'JUGAR CONTRA LA MÁQUINA', () => this.showPairPicker(), true);
+    make(126, 'LOS DOS EN ESTE APARATO', start('challenge', null));
+    make(222, 'PRÁCTICA LIBRE', start('practice'));
+    make(318, 'REGLAS', () => this.showRules());
+    make(414, 'COMPARACIÓN VISUAL', () => this.scene.start('Compare'));
 
-    const soundButton = make(394, '', () => {
+    const soundButton = make(510, '', () => {
       soundBoard.unlock();
       soundBoard.toggleMuted();
       this.refreshSoundLabel();
@@ -122,11 +125,11 @@ export class MenuScene extends Phaser.Scene {
       ? 'Tocá una marca para ir   ·   Mantené TIRAR y soltá en la franja verde   ·   Pausa arriba a la derecha'
       : 'Mover: WASD o flechas   ·   Tirar: mantener ESPACIO y soltar   ·   Pausa: ESC';
     const controlsText = this.add
-      .text(x, LOGICAL_HEIGHT - 84, controls, { fontFamily: UI_FONT, fontSize: '19px', color: PALETTE.hudText })
+      .text(x, LOGICAL_HEIGHT - 60, controls, { fontFamily: UI_FONT, fontSize: '28px', color: PALETTE.hudText })
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud + 1);
     this.add
-      .rectangle(x, LOGICAL_HEIGHT - 84, controlsText.width + 40, 40, 0x0f1409, 0.72)
+      .rectangle(x, LOGICAL_HEIGHT - 60, controlsText.width + 40, 52, 0x0f1409, 0.78)
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud);
   }
@@ -139,14 +142,14 @@ export class MenuScene extends Phaser.Scene {
   private showPairPicker(): void {
     this.closeOverlay();
     const teams = defaultTeams();
-    const width = 900;
-    const height = 430;
+    const width = 980;
+    const height = 560;
     const background = panel(this, 0, 0, width, height);
-    const title = heading(this, 0, -height / 2 + 46, '¿QUÉ PAREJA SOS?');
+    const title = heading(this, 0, -height / 2 + 58, '¿QUÉ PAREJA SOS?', 42);
     const subtitle = this.add
-      .text(0, -height / 2 + 92, 'La otra la juega la máquina', {
+      .text(0, -height / 2 + 116, 'La otra la juega la máquina · vos tirás primero', {
         fontFamily: UI_FONT,
-        fontSize: '21px',
+        fontSize: '30px',
         color: PALETTE.hudText,
       })
       .setOrigin(0.5);
@@ -155,7 +158,7 @@ export class MenuScene extends Phaser.Scene {
       makeButton(
         this,
         0,
-        -34 + index * 88,
+        -20 + index * 108,
         team.name.toUpperCase(),
         () => {
           soundBoard.unlock();
@@ -165,10 +168,14 @@ export class MenuScene extends Phaser.Scene {
             humanTeam: index,
           } satisfies GameSceneData);
         },
-        { width: 560, height: 72, accent: index === 0 },
+        { width: 620, height: 92, fontSize: 34, accent: index === 0 },
       ),
     );
-    const back = makeButton(this, 0, height / 2 - 52, 'VOLVER', () => this.closeOverlay(), { width: 220, height: 50 });
+    const back = makeButton(this, 0, height / 2 - 62, 'VOLVER', () => this.closeOverlay(), {
+      width: 300,
+      height: 78,
+      fontSize: 32,
+    });
 
     this.overlay = this.add
       .container(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, [

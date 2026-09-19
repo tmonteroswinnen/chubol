@@ -102,7 +102,9 @@ const OUTLINE = 'rgba(28, 20, 12, 0.85)';
 export function ballAnchorFor(pose: PoseName): readonly [number, number] {
   const p = POSE_TABLE[pose];
   const across = BODY.shoulderHalfWidth * 0.82 + p.lean + p.handNear[0];
-  const up = 1 - BODY.shoulderY - p.handNear[1] + p.bob;
+  // The crouch lowers the whole upper body by 0.35 of itself (see drawAdult), so
+  // the hand goes down with it.
+  const up = 1 - p.crouch * 0.35 - BODY.shoulderY - p.handNear[1] + p.bob;
   return [across, up];
 }
 
@@ -139,14 +141,23 @@ function limb(
   ctx.closePath();
   ctx.fillStyle = colour;
   ctx.fill();
+
+  // Only the two long sides get an outline. Stroking the closed shape drew the
+  // ends too, which left a dark bar across every shoulder, elbow, hip and knee —
+  // the single thing that most made these read as jointed wooden dolls.
   ctx.strokeStyle = OUTLINE;
   ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(quad[0]![0], quad[0]![1]);
+  ctx.lineTo(quad[1]![0], quad[1]![1]);
+  ctx.moveTo(quad[3]![0], quad[3]![1]);
+  ctx.lineTo(quad[2]![0], quad[2]![1]);
   ctx.stroke();
 
   // The joint at the far end, no wider than the limb, so knees and elbows bend
-  // instead of bulging.
+  // instead of bulging. Wide enough to cover the near end of the next segment.
   ctx.beginPath();
-  ctx.arc(x1, y1, w1, 0, Math.PI * 2);
+  ctx.arc(x1, y1, w1 * 1.08, 0, Math.PI * 2);
   ctx.fillStyle = colour;
   ctx.fill();
 }
@@ -223,6 +234,27 @@ function drawAdult(
   const shortsTop = hipY - u(0.085);
   const shortsBottom = hipY + u(0.115);
 
+  const drawArm = (hand: readonly [number, number], back: boolean) => {
+    const shoulderX = cx + (back ? -shoulderHalf * 0.82 : shoulderHalf * 0.82) + lean;
+    const handX = shoulderX + u(hand[0]);
+    const handY = shoulderY + u(hand[1]);
+    // The elbow bows away from the body, so it has to follow the hand: a fixed
+    // offset bent the arm the wrong way whenever the hand crossed over.
+    const bow = Math.sign(handX - shoulderX || 1) * u(0.022);
+    const elbowX = (shoulderX + handX) / 2 + bow;
+    const elbowY = (shoulderY + handY) / 2 + u(0.018);
+    const tone = back ? PALETTE.skinShade : PALETTE.skin;
+    limb(ctx, shoulderX, shoulderY + u(0.012), elbowX, elbowY, armW, tone);
+    limb(ctx, elbowX, elbowY, handX, handY, armW * 0.9, tone);
+    ctx.fillStyle = tone;
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(handX, handY, armW * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  };
+
   // Both legs are laid out first, so the shorts can follow the stride instead of
   // hanging off the hips like a skirt.
   const legs = ([[pose.footBack, true], [pose.footFront, false]] as const).map(([offset, back]) => ({
@@ -285,6 +317,8 @@ function drawAdult(
     [cx + waistHalf + lean * 0.6, shortsTop + u(0.012)],
     [cx - waistHalf + lean * 0.6, shortsTop + u(0.012)],
   ];
+  // The far arm goes in BEFORE the torso, so the body covers it where they meet.
+  drawArm(pose.handFar, true);
   shape(ctx, torso, acrossBody(ctx, cx - shoulderHalf + lean, cx + shoulderHalf + lean, skin.tankShade, skin.tank));
   if (emblem === 'sun' && !backView) {
     const sx = cx + lean;
@@ -311,28 +345,6 @@ function drawAdult(
     }
     ctx.restore();
   }
-
-  const drawArm = (hand: readonly [number, number], back: boolean) => {
-    const shoulderX = cx + (back ? -shoulderHalf * 0.82 : shoulderHalf * 0.82) + lean;
-    const handX = shoulderX + u(hand[0]);
-    const handY = shoulderY + u(hand[1]);
-    // The elbow bows away from the body, so it has to follow the hand: a fixed
-    // offset bent the arm the wrong way whenever the hand crossed over.
-    const bow = Math.sign(handX - shoulderX || 1) * u(0.022);
-    const elbowX = (shoulderX + handX) / 2 + bow;
-    const elbowY = (shoulderY + handY) / 2 + u(0.018);
-    const tone = back ? PALETTE.skinShade : PALETTE.skin;
-    limb(ctx, shoulderX, shoulderY + u(0.012), elbowX, elbowY, armW, tone);
-    limb(ctx, elbowX, elbowY, handX, handY, armW * 0.9, tone);
-    ctx.fillStyle = tone;
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(handX, handY, armW * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  };
-  drawArm(pose.handFar, true);
 
   // Neck and head.
   const headX = cx + lean * 1.25;
@@ -374,7 +386,7 @@ function drawAdult(
   }
   if (headband) {
     ctx.fillStyle = '#cc3b2f';
-    ctx.fillRect(headX - headHalf * 1.12, top + u(0.056), headHalf * 2.24, Math.max(2, u(0.018)));
+    ctx.fillRect(headX - headHalf * 0.98, top + u(0.056), headHalf * 1.96, Math.max(2, u(0.018)));
   }
 
   drawArm(pose.handNear, false);

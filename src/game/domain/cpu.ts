@@ -55,9 +55,11 @@ export interface CpuSettings {
 }
 
 /**
- * Measured against the real physics, this skill embocas roughly:
- * 2:100%  3:75%  4:78%  5:67%  6:57%  7:53%  8:45%
- * — a rival worth playing that can be beaten. Raise `skill` to make it harder.
+ * Measured against the real physics. The numbers move whenever the charge-to-
+ * speed mapping does, so docs/MAQUINA.md holds the table and this does not try
+ * to keep a copy of it in sync. What matters here: at this skill it is a rival
+ * worth playing that can be beaten, and the rate falls as the mark is worth more.
+ * Raise `skill` to make it harder.
  */
 export const CPU_DEFAULTS: CpuSettings = { skill: 0.5, reactionMs: 420, seed: 20260918 };
 

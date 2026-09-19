@@ -15,6 +15,8 @@ export interface PracticeAttempt {
 export class PracticeSession {
   private readonly log: PracticeAttempt[] = [];
   private nextShotId = 1;
+  /** Index in the log where the current round of the seven marks started. */
+  private lapFrom = 0;
   private pending: { shotId: number; spotId: SpotId; points: number } | null = null;
 
   get total(): number {
@@ -31,7 +33,12 @@ export class PracticeSession {
 
   /** Spots that have been made at least once, for the "one from each" tally. */
   get spotsCleared(): ReadonlySet<SpotId> {
-    return new Set(this.log.filter((a) => a.made).map((a) => a.spotId));
+    return new Set(
+      this.log
+        .slice(this.lapFrom)
+        .filter((a) => a.made)
+        .map((a) => a.spotId),
+    );
   }
 
   get clearedAll(): boolean {
@@ -64,5 +71,17 @@ export class PracticeSession {
     this.log.length = 0;
     this.pending = null;
     this.nextShotId = 1;
+    this.lapFrom = 0;
+  }
+
+  /**
+   * Starts a fresh round of the seven marks without losing what was scored.
+   *
+   * Clearing the whole log would have been simpler and it is what the first
+   * version did, which meant that making all seven set your points back to zero
+   * as a reward.
+   */
+  newLap(): void {
+    this.lapFrom = this.log.length;
   }
 }

@@ -46,6 +46,14 @@ const CELL_HEIGHT = CHARACTER_CANONICAL_HEIGHT + MARGIN * 2;
  */
 const ATLAS_COLUMNS = 5;
 
+/**
+ * How much of a character cell the figure itself occupies. The cell carries a
+ * margin above and below so raised arms and a bobbing body are not clipped, so
+ * anything measured in fractions of the person's height has to be scaled by this
+ * before it is applied to the drawn sprite.
+ */
+export const FIGURE_OF_CELL = CHARACTER_CANONICAL_HEIGHT / CELL_HEIGHT;
+
 export const CHARACTER_ORIGIN_X = 0.5;
 export const CHARACTER_ORIGIN_Y = (CELL_HEIGHT - MARGIN) / CELL_HEIGHT;
 

@@ -41,6 +41,21 @@ boot?.remove();
 
 const game = new Phaser.Game(config);
 
+/*
+ * Turning the phone upright hides the game and asks for it back — but the canvas
+ * is only hidden by CSS, so without this the minute went on running behind the
+ * notice and a pair could lose its whole turn to somebody checking a message.
+ */
+const upright = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+const followOrientation = (portrait: boolean): void => {
+  for (const scene of game.scene.getScenes(true)) {
+    if (portrait) scene.scene.pause();
+    else scene.scene.resume();
+  }
+};
+upright.addEventListener('change', (event) => followOrientation(event.matches));
+if (upright.matches) followOrientation(true);
+
 // Handle for the screenshot and smoke-test harness. It only exposes the game
 // instance; the player never sees it and nothing in the game reads from it.
 declare global {

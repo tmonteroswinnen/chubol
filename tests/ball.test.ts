@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_SPOTS_TOTAL, BALL, BALL_BOUNDS, HOOP, SHOT_SPOTS } from '../src/game/config/court';
+import { ALL_SPOTS_TOTAL, BALL, BALL_BOUNDS, HOOP, SHOT_SPOTS, WALK_BOUNDS } from '../src/game/config/court';
 import { SHOT } from '../src/game/config/gameplay';
 import {
   ShotSimulation,
@@ -54,25 +54,47 @@ describe('ball flight and scoring', () => {
     }
   });
 
-  it('the green band is the whole truth: nothing outside it goes in, on any mark', () => {
-    // The strongest promise the game makes, and the one that used to be only
-    // half true. A badly overpowered shot banks in off the wooden board, and
-    // because the bar stretches the make interval across a fixed slice of
-    // itself, those bank shots landed back on the bar outside the painted band —
-    // on the 5-point mark, holding to the very top was five guaranteed points
-    // through a window WIDER than the one drawn. So the bar is sweeped whole,
-    // mark by mark, and every charge that scores has to be inside the band.
+  it('the green band is the whole truth: nothing outside it goes in, anywhere you can stand', () => {
+    // The strongest promise the game makes, and the one that was only half true
+    // twice over. A badly overpowered shot banks in off the wooden board, and
+    // because the bar stretches the make interval across a fixed slice of itself,
+    // those bank shots landed back on the bar outside the painted band.
+    //
+    // The first fix checked only the exact centre of each mark, and that was not
+    // enough: with the keys you stand anywhere inside the mark's tolerance, the
+    // geometry changes, and on the 4-point mark a few centimetres off centre
+    // holding to the very top was four guaranteed points. So this walks the bar
+    // whole, from several places inside each mark.
     for (const spot of SHOT_SPOTS) {
-      const profile = createShotProfile(spot.x, spot.y, spot.points)!;
-      for (let charge = 0; charge <= 1 + 1e-9; charge += 0.002) {
-        const made = simulateToOutcome(launchFromProfile(profile, charge)!) === 'made';
-        // Only the edges themselves are allowed to disagree, by one step: the
-        // band is solved by bisection and lands within a thousandth.
-        const inside = charge >= profile.window.low - 0.003 && charge <= profile.window.high + 0.003;
-        if (made) expect(inside, `marca ${spot.points}: entra en ${charge.toFixed(3)}, fuera de la franja`).toBe(true);
+      const offsets: readonly (readonly [number, number])[] = [
+        [0, 0],
+        [spot.tolerance * 0.75, 0],
+        [-spot.tolerance * 0.75, 0],
+        [0, spot.tolerance * 0.75],
+        [0, -spot.tolerance * 0.75],
+        [spot.tolerance * 0.5, spot.tolerance * 0.5],
+        [-spot.tolerance * 0.5, -spot.tolerance * 0.5],
+      ];
+      for (const [dx, dy] of offsets) {
+        const x = Math.min(Math.max(spot.x + dx, WALK_BOUNDS.minX), WALK_BOUNDS.maxX);
+        const y = Math.min(Math.max(spot.y + dy, WALK_BOUNDS.minY), WALK_BOUNDS.maxY);
+        const profile = createShotProfile(x, y, spot.points);
+        if (profile === null) continue;
+        for (let charge = 0; charge <= 1 + 1e-9; charge += 0.002) {
+          const made = simulateToOutcome(launchFromProfile(profile, charge)!) === 'made';
+          // Only the edges themselves may disagree, by one step: the band is
+          // solved by bisection and lands within a thousandth.
+          const inside = charge >= profile.window.low - 0.003 && charge <= profile.window.high + 0.003;
+          if (made) {
+            expect(
+              inside,
+              `marca ${spot.points} en (${x.toFixed(2)}, ${y.toFixed(2)}): entra en ${charge.toFixed(3)}, fuera de la franja`,
+            ).toBe(true);
+          }
+        }
       }
     }
-  }, 120000);
+  }, 600000);
 
   it('plays the mark under the hoop as a lay-up, and gives it the widest band', () => {
     // The artwork paints the 2 about 0.36 m from the ring's axis. No arc can

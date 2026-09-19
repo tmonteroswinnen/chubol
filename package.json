@@ -20,7 +20,9 @@
     "test:tactil": "node scripts/touchMulti.mjs",
     "capture:tiro": "node scripts/shotShots.mjs",
     "capture:ui": "node scripts/uiShots.mjs",
-    "capture:hud": "node scripts/hudShot.mjs"
+    "capture:hud": "node scripts/hudShot.mjs",
+    "test:robusto": "node scripts/robustCheck.mjs",
+    "test:maquina": "node scripts/cpuCheck.mjs"
   },
   "dependencies": {
     "phaser": "4.2.1"

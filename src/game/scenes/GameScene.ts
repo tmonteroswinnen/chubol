@@ -18,7 +18,7 @@ import { Match, defaultMatchConfig, type TeamConfig } from '../domain/match';
 import { CPU_DEFAULTS, CpuPlayer, type CpuView } from '../domain/cpu';
 import { PracticeSession } from '../domain/practice';
 import { nearestSpot, spotAt } from '../domain/spots';
-import { ShotSimulation, createShotProfile, launchFromProfile, warmShotProfiles, type ShotProfile } from '../sim/ball';
+import { ShotSimulation, createShotProfile, launchFromProfile, type ShotProfile } from '../sim/ball';
 import { soundBoard } from '../render/audio';
 import { courtProjection } from '../render/context';
 import { CHARGE_CYCLE } from '../render/characters';
@@ -96,6 +96,10 @@ export class GameScene extends Phaser.Scene {
   private walkTarget: { x: number; y: number } | null = null;
   /** Which way the shooter faces: -1 left, 1 right. */
   private facing = -1;
+  /** Position whose shot profile has already been solved, to do it only once. */
+  private warmedAt: string | null = null;
+  /** Marks still to be solved, one per frame. */
+  private warmQueue: ShotSpot[] = [];
   /** The pair played by the machine, and which pair the person is playing. */
   private cpu: CpuPlayer | null = null;
   private humanTeam: number | null = null;
@@ -147,15 +151,19 @@ export class GameScene extends Phaser.Scene {
     this.breakFor = 0;
     this.introFor = 0;
     this.practiceRounds = 0;
+    this.warmedAt = null;
+    this.warmQueue = [];
     this.walking = false;
   }
 
   create(): void {
     this.view = new CourtView(this, courtProjection());
     this.hud = new Hud(this);
-    // Solve the seven marks now. Each one costs tens of milliseconds of
-    // simulation and is otherwise paid at the instant the button goes down.
-    warmShotProfiles(SHOT_SPOTS);
+    // The seven marks get solved one per frame, not all at once: solving one is
+    // tens of milliseconds of simulation and the lay-up is over a hundred, so
+    // doing them together freezes the screen on the way in. Queued here and
+    // consumed while the "your turn" card is up, when nothing else is moving.
+    this.warmQueue = [...SHOT_SPOTS];
 
     if (this.sceneData.mode === 'challenge') {
       const base = defaultMatchConfig(this.sceneData.teams);
@@ -527,6 +535,16 @@ export class GameScene extends Phaser.Scene {
     const launch = launchFromProfile(profile, this.chargeValue());
     if (launch === null) return;
 
+    // The buzzer may have gone in this very frame. The clock is ticked at the
+    // top of update() and the turn is only closed further down, so between those
+    // two the machine can decide to let go with the minute already at zero — and
+    // then beginShot throws out of the frame callback and the whole game loop
+    // stops being scheduled. Ask first.
+    if (this.match !== null && !this.match.canShootFrom(spot.id)) {
+      this.cancelCharge();
+      return;
+    }
+
     // The value is captured here, at release, and never recomputed afterwards.
     this.lockedPoints = spot.points;
     this.shotId =
@@ -549,11 +567,11 @@ export class GameScene extends Phaser.Scene {
       soundBoard.chain();
       soundBoard.score(this.lockedPoints);
       this.view.popScore(this.shooter.x, this.shooter.y, `+${this.lockedPoints}`, true);
-      this.view.setFriend(this.friendIndex, { pose: 'cheer' });
+      this.view.setFriend(this.friendIndex, { pose: 'cheer', facing: this.facing });
       } else {
       soundBoard.miss();
       this.view.popScore(this.shooter.x, this.shooter.y, 'AFUERA', false);
-      this.view.setFriend(this.friendIndex, { pose: 'follow' });
+      this.view.setFriend(this.friendIndex, { pose: 'follow', facing: this.facing });
     }
 
     const state = this.simulation?.state;
@@ -571,7 +589,7 @@ export class GameScene extends Phaser.Scene {
     // happened. Now it says so, and then lets you go round again.
     if (this.practice !== null && this.practice.clearedAll) {
       this.practiceRounds += 1;
-      this.practice.reset();
+      this.practice.newLap();
       soundBoard.fanfare();
       this.flashBanner(['LAS SIETE MARCAS', this.practiceRounds === 1 ? 'OTRA VUELTA' : `VUELTA ${this.practiceRounds + 1}`]);
     }
@@ -816,6 +834,14 @@ export class GameScene extends Phaser.Scene {
       this.hud.setClock(this.match.timeLeft);
     }
 
+    this.warmOneMark();
+
+    // Close the turn before anyone gets to act on a frame whose clock already
+    // ran out.
+    if (this.match !== null && this.match.timeUp && this.phase !== 'turnBreak' && this.phase !== 'over') {
+      this.endTurn();
+    }
+
     if (this.cpuIsPlaying() && this.phase !== 'turnIntro') this.updateCpu(delta);
 
     switch (this.phase) {
@@ -852,13 +878,28 @@ export class GameScene extends Phaser.Scene {
       this.endTurn();
     }
 
+    this.breatheWaitingFriends();
     this.refreshShootButton();
     this.view.update(delta);
+  }
+
+  /**
+   * The three who are not shooting were frozen in one pose for the whole match,
+   * which made the court look like a photograph with one person moving in it.
+   * Offset per friend so they do not all breathe on the same frame.
+   */
+  private breatheWaitingFriends(): void {
+    if (this.phase === 'turnIntro' || this.phase === 'turnBreak' || this.phase === 'over') return;
+    CHARACTER_KEYS.forEach((_, index) => {
+      if (index === this.friendIndex) return;
+      this.view.setFriend(index, { pose: CourtView.idleFrame(this.timer + index * 240) });
+    });
   }
 
   private updatePositioning(delta: number): void {
     this.movePlayer(delta);
     this.updateHints();
+    this.warmSpotUnderfoot();
     // Standing still, they look at the hoop; walking, they look where they go.
     if (!this.walking) this.faceTowards(HOOP.groundX - this.shooter.x);
     const pose = this.walking ? CourtView.walkFrame(this.timer) : 'hold';
@@ -868,6 +909,35 @@ export class GameScene extends Phaser.Scene {
       soundBoard.step();
       this.view.puff(this.shooter.x, this.shooter.y);
     }
+  }
+
+  /**
+   * Solves the shot for wherever the shooter is standing, before they press.
+   *
+   * Warming the seven centres is not enough for anyone playing with the keys:
+   * they end up a few centimetres off, the cache misses, and the whole search
+   * runs inside the frame that the button goes down on — which is the one frame
+   * where a stutter is unforgivable. Doing it on arrival moves that cost to a
+   * frame where nothing is happening.
+   */
+  /** Solves one queued mark, at most one per frame. */
+  private warmOneMark(): void {
+    if (this.phase !== 'turnIntro' && this.phase !== 'positioning') return;
+    const spot = this.warmQueue.shift();
+    if (spot === undefined) return;
+    createShotProfile(spot.x, spot.y, spot.points);
+  }
+
+  private warmSpotUnderfoot(): void {
+    const spot = this.currentSpot();
+    if (spot === null) {
+      this.warmedAt = null;
+      return;
+    }
+    const key = `${Math.round(this.shooter.x * 100)}:${Math.round(this.shooter.y * 100)}`;
+    if (this.warmedAt === key) return;
+    this.warmedAt = key;
+    createShotProfile(this.shooter.x, this.shooter.y, spot.points);
   }
 
   private updateCharging(delta: number): void {
@@ -922,12 +992,16 @@ export class GameScene extends Phaser.Scene {
     this.view.setFriend(
       this.friendIndex,
       pose === undefined
-        ? { x: this.shooter.x, y: this.shooter.y }
-        : { x: this.shooter.x, y: this.shooter.y, pose },
+        ? { x: this.shooter.x, y: this.shooter.y, facing: this.facing }
+        : { x: this.shooter.x, y: this.shooter.y, pose, facing: this.facing },
     );
 
     const distance = Math.hypot(this.shooter.x - this.ballRest.x, this.shooter.y - this.ballRest.y);
-    this.hud.setHint(`Tocá la pelota para ir a buscarla — ${distance.toFixed(1)} m (el reloj corre)`);
+    this.hud.setHint(
+      this.cpuIsPlaying()
+        ? `Juega ${this.match?.currentTeam.name ?? 'la otra pareja'} — está yendo a buscar la pelota`
+        : `Tocá la pelota para ir a buscarla — ${distance.toFixed(1)} m (el reloj corre)`,
+    );
 
     if (distance <= PICKUP_RADIUS) {
       soundBoard.bounce();

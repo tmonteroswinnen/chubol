@@ -18,6 +18,7 @@ import { IDLE_CYCLE, WALK_CYCLE, ballAnchorFor, type PoseName } from './characte
 import {
   ADULT_HEIGHT_METRES,
   BALL_CANONICAL_DIAMETER,
+  FIGURE_OF_CELL,
   BALL_SPINS,
   CHARACTER_KEYS,
   CHARACTER_ORIGIN_X,
@@ -209,8 +210,11 @@ export class CourtView {
   highlightSpot(index: number | null, available = true): void {
     this.markers.forEach((marker, i) => {
       const active = i === index;
-      marker.setAlpha(active ? (available ? 0.95 : 0.55) : 0.3);
-      marker.setTint(active && !available ? 0x8d8778 : 0xffffff);
+      // The free marks have to be visible on their own — they are what tells you
+      // where you can go — and the one under your feet brighter still. A used
+      // mark is dimmed AND tinted red, so it never just looks like a faded one.
+      marker.setAlpha(active ? 1 : 0.55);
+      marker.setTint(active && !available ? 0xd4705c : 0xffffff);
     });
   }
 
@@ -277,14 +281,20 @@ export class CourtView {
     if (image === undefined || state === undefined) return;
 
     const [across, up] = ballAnchorFor(state.pose);
-    const height = image.displayHeight;
+    // Of the FIGURE, not of the atlas cell. The cell is the figure plus a margin
+    // top and bottom, and using it put the ball 17% too far out in both axes.
+    const height = image.displayHeight * FIGURE_OF_CELL;
     // The sprite is drawn facing left with the shooting arm on its right side,
     // so flipping it to face right puts that hand on the left. The ball has to
     // follow, or it floats behind the player's back.
     const side = state.facing >= 0 ? -1 : 1;
+    // Scaled through the projection at the height the hand really is, which is
+    // the same rule `setBall` uses. Deriving it from the sprite instead made the
+    // ball jump about a fifth of its size in the frame it left the hand.
+    const at = this.projection.project(state.x, state.y, up * ADULT_HEIGHT_METRES);
     this.ball
       .setVisible(true)
-      .setScale((image.scaleX * BALL.radius * 2 * 300) / (ADULT_HEIGHT_METRES * BALL_CANONICAL_DIAMETER))
+      .setScale((at.scale * BALL.radius * 2) / BALL_CANONICAL_DIAMETER)
       .setPosition(image.x + side * across * height, image.y - up * height)
       .setDepth(image.depth + 6);
     this.ballShadow.setVisible(false);
@@ -305,7 +315,10 @@ export class CourtView {
       .setTexture(this.ball.texture.key)
       .setPosition(this.ball.x, this.ball.y)
       .setScale(this.ball.scaleX * 0.9)
-      .setDepth(this.ball.depth - 1)
+      // Behind the ball, always. Phaser draws same-depth objects in creation
+      // order, and the ghosts are created first, so a plain -1 is not enough
+      // once the ball's own depth changes during the flight.
+      .setDepth(this.ball.depth - 2)
       .setAlpha(0.42)
       .setVisible(true);
     this.scene.tweens.killTweensOf(ghost);
@@ -358,8 +371,8 @@ export class CourtView {
     image.y = this.hoopFrontY;
     this.scene.tweens.add({
       targets: image,
-      y: this.hoopFrontY + 4 * strength,
-      duration: 70,
+      y: this.hoopFrontY + 2.5 * strength,
+      duration: 60,
       yoyo: true,
       repeat: 2,
       ease: 'Sine.easeOut',
@@ -375,7 +388,7 @@ export class CourtView {
     const dust = this.add(
       this.scene.add
         .ellipse(at.x, at.y, at.scale * 0.22, at.scale * 0.22 * GROUND_FLATTEN, 0xc9bb92, 0.42)
-        .setDepth(depthFor(at.depth) - 2),
+        .setDepth(depthFor(at.depth) + 1),
     );
     this.scene.tweens.add({
       targets: dust,

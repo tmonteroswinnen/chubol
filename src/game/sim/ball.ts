@@ -320,8 +320,15 @@ export interface Interval {
  * island as the edge of the band, which is worse than not looking at all.
  */
 const SCAN_STEP = 0.004;
-/** How far out the search is willing to walk, as a fraction of the ideal speed. */
-const SCAN_LIMIT = 0.95;
+/**
+ * How far out the search is willing to walk, as a fraction of the ideal speed.
+ *
+ * Wide enough for the lay-up, which is the extreme case: dropped in from above
+ * the ring from a quarter of a metre away it still goes in at twice the ideal
+ * speed. At 0.95 the search hit its own limit and reported that as the edge, and
+ * then the bar had nowhere to go above the band — so everything above it scored.
+ */
+const SCAN_LIMIT = 1.4;
 /**
  * How much further to keep looking for a bank-shot island once the band has
  * ended. Every island measured starts within 0.03 of the edge of the band, so
@@ -416,6 +423,12 @@ const OUTSIDE_SPAN = 0.22;
  * through rounding.
  */
 const OUTSIDE_SAFETY = 0.55;
+/**
+ * Step used to double-check that nothing outside the band scores. Finer than the
+ * narrowest bank-shot island measured anywhere on the court, which is 0.0025 of
+ * the ideal speed, so an island can never fall between two checks.
+ */
+const VERIFY_STEP = 0.001;
 
 /**
  * Everything an attempt needs: where it is taken from, how the charge bar maps
@@ -460,11 +473,6 @@ export function designedBandWidth(points: number): number {
 const profileCache = new Map<string, ShotProfile>();
 const PROFILE_CACHE_LIMIT = 96;
 
-/** Solves the seven marks up front, where the cost is not in anyone's way. */
-export function warmShotProfiles(spots: readonly { x: number; y: number; points: number }[]): void {
-  for (const spot of spots) createShotProfile(spot.x, spot.y, spot.points);
-}
-
 export function createShotProfile(fromX: number, fromY: number, points: number): ShotProfile | null {
   const key = `${Math.round(fromX * 100)}:${Math.round(fromY * 100)}:${points}`;
   const cached = profileCache.get(key);
@@ -496,7 +504,7 @@ function solveShotProfile(fromX: number, fromY: number, points: number): ShotPro
    *
    * The reason is the bank shots. The band is stretched to cover the make
    * interval exactly, so the rest of the bar covers whatever lies beyond it —
-   * and beyond it, on five of the seven marks, there is a second stretch of
+   * and beyond it, on four of the seven marks, there is a second stretch of
    * speeds that goes in off the board. With a single slope those landed back on
    * the bar in a place nothing drew: on the 5-point mark, holding to the very
    * top was five guaranteed points, through a window WIDER than the painted one.
@@ -506,10 +514,56 @@ function solveShotProfile(fromX: number, fromY: number, points: number): ShotPro
    * is then true in both directions: inside the green it goes in, outside it
    * does not.
    */
+  const makes = (multiplier: number): boolean => {
+    const launch = launchAtMultiplier(fromX, fromY, multiplier);
+    return launch !== null && simulateToOutcome(launch) === 'made';
+  };
+
+  /**
+   * Walks from the edge of the band out to a proposed limit and stops short of
+   * anything that still goes in.
+   *
+   * The island search alone is not enough, and that was a real bug rather than a
+   * precaution: it walks in steps of SCAN_STEP and keeps the first probe that
+   * scores, so an island narrower than the step is missed entirely and the one it
+   * reports is the NEXT one, further out — and the bar then sweeps straight over
+   * the island nobody saw. Standing a few centimetres off the centre of the
+   * 4-point mark, holding to the very top was four guaranteed points. This does
+   * not trust the sampling: it checks the answer.
+   */
+  const pullIn = (edge: number, limit: number, direction: 1 | -1): number => {
+    const span = Math.abs(limit - edge);
+    if (span < VERIFY_STEP) return limit;
+    for (let offset = VERIFY_STEP; offset <= span + 1e-9; offset += VERIFY_STEP) {
+      if (makes(edge + direction * offset)) return edge + direction * Math.max(0, offset - VERIFY_STEP * 1.5);
+    }
+    return limit;
+  };
+
   const gapAbove = range.islandAbove === null ? null : range.islandAbove - range.high;
   const gapBelow = range.islandBelow === null ? null : range.low - range.islandBelow;
-  const ceiling = gapAbove === null ? range.high + OUTSIDE_SPAN : range.high + gapAbove * OUTSIDE_SAFETY;
-  const floor = gapBelow === null ? range.low - OUTSIDE_SPAN : range.low - gapBelow * OUTSIDE_SAFETY;
+  const ceiling = pullIn(
+    range.high,
+    gapAbove === null ? range.high + OUTSIDE_SPAN : range.high + gapAbove * OUTSIDE_SAFETY,
+    1,
+  );
+  const floor = pullIn(
+    range.low,
+    gapBelow === null ? range.low - OUTSIDE_SPAN : range.low - gapBelow * OUTSIDE_SAFETY,
+    -1,
+  );
+
+  /*
+   * If the bar cannot reach a miss on one side — which happens where the
+   * tolerance is so wide that there is nothing outside it within reach — then
+   * the band is drawn all the way to that end of the bar. The drawing has to
+   * keep matching what actually scores, even when the honest answer is "from
+   * here, everything goes in".
+   */
+  const deadAbove = ceiling - range.high < 1e-4;
+  const deadBelow = range.low - floor < 1e-4;
+  const drawnLow = deadBelow ? 0 : bandLow;
+  const drawnHigh = deadAbove ? 1 : bandHigh;
 
   const multiplierFor = (charge: number): number => {
     if (charge <= bandLow) {
@@ -534,7 +588,7 @@ function solveShotProfile(fromX: number, fromY: number, points: number): ShotPro
     fromY,
     distance,
     idealSpeed: ideal,
-    window: { low: bandLow, high: bandHigh },
+    window: { low: drawnLow, high: drawnHigh },
     multiplierFor,
   };
 }

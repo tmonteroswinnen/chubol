@@ -25,9 +25,10 @@ esta separación: nada de lo interpretado está escrito como si fuera histórico
 
 ### Dificultad por número
 
-El aro deja un margen físico de aproximadamente ±1 % de la velocidad de lanzamiento
-en la marca de 2, y ±0,4 % en la de 8. Eso es imposible de acertar con una barra de
-tiempo. Entonces la barra no es una escala fija de velocidad: para cada intento se
+El aro deja un margen físico muy chico: desde la marca de 8, la velocidad de
+lanzamiento tiene que caer dentro de una ventana de ±1 % (medido: entra entre
+0,991 y 1,012 de la velocidad ideal), y desde la de 6 dentro de ±1,7 %. Eso es
+imposible de acertar con una barra de tiempo. Entonces la barra no es una escala fija de velocidad: para cada intento se
 estira el mapeo carga → velocidad de forma que **el intervalo real de acierto caiga
 exactamente sobre la franja verde dibujada**.
 
@@ -54,16 +55,21 @@ fue lo que pediste.
 Durante un tiempo la franja era verdad sólo hacia adentro. Un tiro pasado de
 fuerza pega en el tablero y entra igual, y como la barra estira el intervalo de
 acierto sobre una porción fija de sí misma, esos tiros de tablero volvían a caer
-sobre la barra en un lugar que nadie dibujó. En cinco de las siete marcas había
+sobre la barra en un lugar que nadie dibujó. En cuatro de las siete marcas había
 una segunda ventana invisible; en la de 5 era **más ancha que la franja pintada y
 llegaba justo al tope**, o sea que mantener el botón hasta arriba eran 5 puntos
 garantizados. La de 2, además, tenía el intervalo recortado por el límite de
 búsqueda: la franja decía 17 % de la barra y la realidad era 59 %.
 
-Ahora el solver busca el intervalo de verdad y además busca la primera isla de
-tablero, y el mapeo de los extremos de la barra frena antes de llegar. El test
-`tests/ball.test.ts` barre la barra entera, marca por marca, y falla si algo
-entra fuera de la franja.
+Ahora el solver busca el intervalo de verdad, busca la primera isla de tablero y
+después **verifica su propia respuesta**: barre desde el borde de la franja hasta
+el extremo de la barra y frena antes de cualquier cosa que entre. Esa verificación
+hace falta porque el muestreo miente: una isla más angosta que el paso de búsqueda
+se saltea entera, y ahí la barra pasaba justo por arriba de una isla que nadie vio.
+
+El test `tests/ball.test.ts` barre la barra entera, marca por marca, **y desde
+siete posiciones distintas dentro de cada marca** — no sólo desde el centro, que
+es donde nunca estás si jugás con las teclas.
 
 Efecto de costado: **una pelota que picó en el pasto ya no puede entrar.** Es una
 regla nueva y hay que decirla. Está por dos motivos: en un patio es lo que pasa,

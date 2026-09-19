@@ -21,10 +21,11 @@ export interface ResultSceneData {
  * painted into the plate.
  */
 const CELEBRATION_SPOTS = [
-  { x: 0.9, y: -2.2 },
-  { x: 2.4, y: -2.55 },
-  { x: 5.9, y: -2.55 },
-  { x: 7.4, y: -2.2 },
+  // Not right against the front wall: it cuts the shoes and the shadow off.
+  { x: 0.9, y: -1.9 },
+  { x: 2.4, y: -2.15 },
+  { x: 5.9, y: -2.15 },
+  { x: 7.4, y: -1.9 },
 ] as const;
 
 export class ResultScene extends Phaser.Scene {
@@ -41,6 +42,10 @@ export class ResultScene extends Phaser.Scene {
 
   init(data: ResultSceneData): void {
     this.sceneData = data;
+    // The scene object is reused, so anything kept in a field survives into the
+    // next match: after a rematch the pair that won the PREVIOUS one celebrated.
+    this.happy.length = 0;
+    this.timer = 0;
   }
 
   create(): void {
